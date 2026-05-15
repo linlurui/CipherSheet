@@ -1,0 +1,16 @@
+name: decentrilicense
+description: DecentriLicense Flutter/Dart SDK - FFI bindings for dl-core native library
+version: 1.0.0
+homepage: https://github.com/linlurui/decentrilicense
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  ffi: ^2.1.0
+  path: ^1.8.0
+
+dev_dependencies:
+  ffigen: ^11.0.0
+  lints: ^3.0.0
+  test: ^1.24.0

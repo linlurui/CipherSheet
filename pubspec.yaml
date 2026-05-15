@@ -23,7 +23,7 @@ dependencies:
   local_auth: ^2.3.0
   # Local path dependency to dl-core Flutter SDK bindings
   decentrilicense:
-    path: ../ccait/dl-issuer/sdks/flutter
+    path: packages/decentrilicense
 
 dev_dependencies:
   flutter_test:
