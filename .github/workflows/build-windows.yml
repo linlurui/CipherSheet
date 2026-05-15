@@ -1,0 +1,42 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: 'stable'
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Copy native dll
+        shell: cmd
+        run: |
+          copy native\windows-x86_64\libdecentrilicense.dll build\windows\x64\runner\Release\decentrilicense.dll
+          copy native\windows-x86_64\libdecentrilicense.dll build\windows\x64\runner\Release\libdecentrilicense.dll
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ciphersheet-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ciphersheet-windows-x64
+          path: ciphersheet-windows-x64.zip
+          retention-days: 30
