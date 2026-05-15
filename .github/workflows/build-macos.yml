@@ -1,0 +1,36 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: 'stable'
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build macOS Universal
+        run: bash scripts/build_macos_universal.sh
+
+      - name: Package zip
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r --symlinks $GITHUB_WORKSPACE/ciphersheet-macos-universal.zip ciphersheet.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ciphersheet-macos-universal
+          path: ciphersheet-macos-universal.zip
+          retention-days: 30

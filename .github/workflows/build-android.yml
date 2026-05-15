@@ -1,0 +1,49 @@
+name: Build Android
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: 'stable'
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Sync jniLibs
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            src="native/android/$abi/libdecentrilicense.so"
+            dst="android/app/src/main/jniLibs/$abi"
+            if [ -f "$src" ]; then
+              mkdir -p "$dst"
+              cp -f "$src" "$dst/"
+              echo "✓ $abi"
+            fi
+          done
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ciphersheet-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
