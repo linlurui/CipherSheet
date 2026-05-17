@@ -623,28 +623,36 @@ class _FormulaTab extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('编辑盘点公式'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '公式结果 > 记账金额 = 盘盈\n'
-              '公式结果 = 记账金额 = 盘平\n'
-              '公式结果 < 记账金额 = 盘亏',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
+        content: SizedBox(
+          width: double.infinity,
+          height: 280,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '公式结果 > 记账金额 = 盘盈\n'
+                  '公式结果 = 记账金额 = 盘平\n'
+                  '公式结果 < 记账金额 = 盘亏',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  maxLines: null,
+                  minLines: 3,
+                  keyboardType: TextInputType.multiline,
+                  decoration: const InputDecoration(
+                    hintText: '例: amount * (1 + 利率) * multiplier',
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text('支持: + - * / 和括号。变量名会被替换为数值后计算。',
+                    style: TextStyle(fontSize: 11, color: Colors.black45)),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: '例: amount * (1 + 利率) * multiplier',
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text('支持: + - * / 和括号。变量名会被替换为数值后计算。',
-                style: TextStyle(fontSize: 11, color: Colors.black45)),
-          ],
+          ),
         ),
         actions: [
           TextButton(
