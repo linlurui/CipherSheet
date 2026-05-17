@@ -44,7 +44,7 @@ class DefaultSettleAction {
   static const String even     = '盘平';
   static const String deficit  = '盘亏';
   static const String none     = '不处理';
-  static const List<String> all = [surplus, even, deficit, none];
+  static const List<String> all = [surplus, deficit, even, none];
 }
 
 /// 账本规则（开关 + 默认行为）

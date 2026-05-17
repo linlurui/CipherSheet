@@ -335,8 +335,25 @@ class AppState extends ChangeNotifier {
   /// 更新账本规则
   Future<void> updateLedgerRules(String id, LedgerRules rules) async {
     final l = _store.ledgers.firstWhere((x) => x.id == id);
+    final prevEnableCellParams = l.rules.enableCellParams;
     l.rules = rules;
     l.updatedAt = DateTime.now();
+
+    // 如果关闭了单元参数设置，清除所有单元格的参数（使用账本统一参数）
+    if (prevEnableCellParams && !rules.enableCellParams) {
+      final bills = _store.bills[id] ?? [];
+      for (var billIdx = 0; billIdx < bills.length; billIdx++) {
+        final bill = bills[billIdx];
+        for (var cellIdx = 0; cellIdx < bill.cells.length; cellIdx++) {
+          final cell = bill.cells[cellIdx];
+          if (cell.parameters.isNotEmpty) {
+            bill.cells[cellIdx] = cell.copyWith(parameters: []);
+          }
+        }
+        bills[billIdx] = bill.copyWith();
+      }
+    }
+
     await _persistAndChain('update_ledger_rules', {'ledger_id': id});
   }
 

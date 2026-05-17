@@ -487,7 +487,7 @@ class _RulesSettingsDialogState extends State<RulesSettingsDialog> {
                       padding: const EdgeInsets.only(left: 16, top: 4, bottom: 4),
                       child: Row(
                         children: [
-                          const Text('未选中单元默认：',
+                          const Text('未选中单元默认-',
                               style: TextStyle(fontSize: 13, color: Colors.black54)),
                           const SizedBox(width: 8),
                           DropdownButton<String>(
@@ -497,7 +497,7 @@ class _RulesSettingsDialogState extends State<RulesSettingsDialog> {
                                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                                 .toList(),
                             onChanged: (v) =>
-                                setState(() => _batchDefault = v ?? DefaultSettleAction.none),
+                                setState(() => _batchDefault = v ?? DefaultSettleAction.surplus),
                           ),
                         ],
                       ),

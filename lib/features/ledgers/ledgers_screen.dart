@@ -440,23 +440,26 @@ class _LedgerTabLabelState extends State<_LedgerTabLabel> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.mnemonicEnabled)
-            const Padding(
-              padding: EdgeInsets.only(right: 4),
-              child: Icon(Icons.key, size: 14, color: Colors.amber),
-            ),
-          Text(widget.name),
-          if (_hovering) ...[
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: widget.onDelete,
-              child: Icon(Icons.close, size: 14, color: Colors.red.shade400),
-            ),
+      child: GestureDetector(
+        onLongPress: widget.onDelete,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.mnemonicEnabled)
+              const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: Icon(Icons.key, size: 14, color: Colors.amber),
+              ),
+            Text(widget.name),
+            if (_hovering) ...[
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: widget.onDelete,
+                child: Icon(Icons.close, size: 14, color: Colors.red.shade400),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
