@@ -295,24 +295,45 @@ class _ParamsTab extends StatelessWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
           title: const Text('新增参数'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: keyCtrl, decoration: const InputDecoration(labelText: '参数名')),
-              const SizedBox(height: 8),
-              TextField(controller: valCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '数值')),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: selectedUnit,
-                isDense: true,
-                decoration: const InputDecoration(labelText: '单位'),
-                items: ParameterUnit.all.map((u) => DropdownMenuItem(
-                  value: u,
-                  child: Text(ParameterUnit.getLabel(u)),
-                )).toList(),
-                onChanged: (v) => setState(() => selectedUnit = v ?? ''),
-              ),
-            ],
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: keyCtrl,
+                        decoration: const InputDecoration(labelText: '参数名', isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: valCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: '数值', isDense: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedUnit,
+                  isDense: true,
+                  isExpanded: false,
+                  decoration: const InputDecoration(labelText: '单位', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                  items: ParameterUnit.all.map((u) => DropdownMenuItem(
+                    value: u,
+                    child: Text(u.isEmpty ? '无' : u),
+                  )).toList(),
+                  onChanged: (v) => setState(() => selectedUnit = v ?? ''),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
@@ -350,22 +371,30 @@ class _ParamsTab extends StatelessWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
           title: Text('编辑参数 ${p.key}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: valCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '数值')),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: selectedUnit,
-                isDense: true,
-                decoration: const InputDecoration(labelText: '单位'),
-                items: ParameterUnit.all.map((u) => DropdownMenuItem(
-                  value: u,
-                  child: Text(ParameterUnit.getLabel(u)),
-                )).toList(),
-                onChanged: (v) => setState(() => selectedUnit = v ?? ''),
-              ),
-            ],
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: valCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: '数值', isDense: true),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedUnit,
+                  isDense: true,
+                  isExpanded: false,
+                  decoration: const InputDecoration(labelText: '单位', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                  items: ParameterUnit.all.map((u) => DropdownMenuItem(
+                    value: u,
+                    child: Text(u.isEmpty ? '无' : u),
+                  )).toList(),
+                  onChanged: (v) => setState(() => selectedUnit = v ?? ''),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
