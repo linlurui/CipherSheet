@@ -217,6 +217,9 @@ class DecentriLicenseNative {
     if (Platform.isMacOS) {
       // @executable_path is resolved by macOS dyld to the dir of the main executable
       return DynamicLibrary.open('@executable_path/libdecentrilicense.dylib');
+    } else if (Platform.isAndroid) {
+      // On Android, the library is bundled in jniLibs and loaded by name
+      return DynamicLibrary.open('libdecentrilicense.so');
     } else if (Platform.isLinux) {
       final exeDir = File(Platform.executable).parent.path;
       final p = '$exeDir/libdecentrilicense.so';
