@@ -33,6 +33,8 @@ class _Bootstrap extends StatefulWidget {
 }
 
 class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
+  bool _obscured = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,14 +50,17 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
     final appState = context.read<AppState>();
-    // 移动端: paused, 桌面端: inactive/hidden
     if (lifecycle == AppLifecycleState.paused ||
         lifecycle == AppLifecycleState.inactive ||
         lifecycle == AppLifecycleState.hidden) {
       appState.onAppPaused();
+      // 进入后台时立刻遮挡，防止多任务截图泄露内容
+      if (appState.screenLock.isEnabled) {
+        setState(() => _obscured = true);
+      }
     } else if (lifecycle == AppLifecycleState.resumed) {
       appState.onAppResumed();
-      // 锁屏后切回时，_LockScreen 会自动弹解锁框（由 build 决定渲染哪个页面）
+      setState(() => _obscured = false);
     }
   }
 
@@ -120,6 +125,11 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         break;
     }
 
+    // 进入后台时用灰色遮挡，防止多任务截图泄露
+    if (_obscured) {
+      return const Scaffold(backgroundColor: Color(0xFF2C2C2C));
+    }
+
     return page;
   }
 }
@@ -161,22 +171,22 @@ class _LockScreenState extends State<_LockScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF2C2C2C),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lock, size: 64, color: Colors.blue),
+            const Icon(Icons.lock, size: 64, color: Colors.white54),
             const SizedBox(height: 16),
-            const Text('应用已锁定', style: TextStyle(fontSize: 16)),
+            const Text('应用已锁定', style: TextStyle(fontSize: 16, color: Colors.white54)),
             const SizedBox(height: 24),
             TextButton.icon(
               onPressed: () {
                 _dialogShown = false;
                 _showVerify();
               },
-              icon: const Icon(Icons.lock_open),
-              label: const Text('解锁'),
+              icon: const Icon(Icons.lock_open, color: Colors.white70),
+              label: const Text('解锁', style: TextStyle(color: Colors.white70)),
             ),
           ],
         ),
