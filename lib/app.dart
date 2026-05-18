@@ -63,6 +63,11 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
 
+    // 锁屏优先：不构建任何业务内容
+    if (state.screenLocked && state.screenLock.isEnabled) {
+      return _LockScreen(service: state.screenLock, onUnlocked: state.unlockScreen);
+    }
+
     // 基础页面（根据 stage）
     Widget page;
     switch (state.stage) {
@@ -113,11 +118,6 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
           page = _ExpiryWarningWrapper(daysLeft: days, child: page);
         }
         break;
-    }
-
-    // 如果处于锁屏状态，显示专用锁屏页（避免冷启动 dialog context 问题）
-    if (state.screenLocked && state.screenLock.isEnabled) {
-      return _LockScreen(service: state.screenLock, onUnlocked: state.unlockScreen);
     }
 
     return page;
