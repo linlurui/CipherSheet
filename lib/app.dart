@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'features/activation/activation_screen.dart';
 import 'features/activation/mnemonic_wizard_screen.dart';
 import 'features/ledgers/ledgers_screen.dart';
+import 'core/security/screen_lock_service.dart';
 import 'features/security/lock_screen_dialogs.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
@@ -36,10 +37,6 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 延迟检查启动时是否需要锁屏
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkScreenLock();
-    });
   }
 
   @override
@@ -49,38 +46,16 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
     final appState = context.read<AppState>();
     // 移动端: paused, 桌面端: inactive/hidden
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden) {
+    if (lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.inactive ||
+        lifecycle == AppLifecycleState.hidden) {
       appState.onAppPaused();
-    } else if (state == AppLifecycleState.resumed) {
+    } else if (lifecycle == AppLifecycleState.resumed) {
       appState.onAppResumed();
-      _checkScreenLock();
-    }
-  }
-
-  /// 检查并显示锁屏验证
-  Future<void> _checkScreenLock() async {
-    final state = context.read<AppState>();
-    if (!state.screenLocked) return;
-    if (!state.screenLock.isEnabled) return;
-
-    // 显示验证对话框
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => LockScreenVerifyDialog(service: state.screenLock),
-    );
-
-    if (result == true) {
-      // 验证成功，解锁
-      state.unlockScreen();
-    } else {
-      // 验证失败或取消，退出应用
-      exit(0);
+      // 锁屏后切回时，_LockScreen 会自动弹解锁框（由 build 决定渲染哪个页面）
     }
   }
 
@@ -140,34 +115,73 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         break;
     }
 
-    // 如果处于锁屏状态，添加模糊遮罩（验证对话框会显示在上方）
+    // 如果处于锁屏状态，显示专用锁屏页（避免冷启动 dialog context 问题）
     if (state.screenLocked && state.screenLock.isEnabled) {
-      return Stack(
-        children: [
-          page,
-          Container(
-            color: Colors.black.withValues(alpha: 0.3),
-            child: const Center(
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.lock, size: 48, color: Colors.blue),
-                      SizedBox(height: 16),
-                      Text('应用已锁定'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
+      return _LockScreen(service: state.screenLock, onUnlocked: state.unlockScreen);
     }
 
     return page;
+  }
+}
+
+class _LockScreen extends StatefulWidget {
+  final ScreenLockService service;
+  final VoidCallback onUnlocked;
+  const _LockScreen({required this.service, required this.onUnlocked});
+
+  @override
+  State<_LockScreen> createState() => _LockScreenState();
+}
+
+class _LockScreenState extends State<_LockScreen> {
+  bool _dialogShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showVerify());
+  }
+
+  Future<void> _showVerify() async {
+    if (_dialogShown || !mounted) return;
+    _dialogShown = true;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => LockScreenVerifyDialog(service: widget.service),
+    );
+    if (!mounted) return;
+    if (result == true) {
+      widget.onUnlocked();
+    } else {
+      exit(0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.lock, size: 64, color: Colors.blue),
+            const SizedBox(height: 16),
+            const Text('应用已锁定', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 24),
+            TextButton.icon(
+              onPressed: () {
+                _dialogShown = false;
+                _showVerify();
+              },
+              icon: const Icon(Icons.lock_open),
+              label: const Text('解锁'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
