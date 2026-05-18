@@ -132,6 +132,11 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         } else {
           page = const LedgersScreen();
         }
+        // 过期前 3 天显示提醒 Banner
+        final days = state.daysUntilExpiry;
+        if (days != null && days > 0 && days <= 3 && !state.expiryWarningDismissed) {
+          page = _ExpiryWarningWrapper(daysLeft: days, child: page);
+        }
         break;
     }
 
@@ -163,5 +168,45 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     }
 
     return page;
+  }
+}
+
+class _ExpiryWarningWrapper extends StatelessWidget {
+  final int daysLeft;
+  final Widget child;
+  const _ExpiryWarningWrapper({required this.daysLeft, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: Colors.orange.shade700,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '授权码将在 $daysLeft 天后过期，请及时续费',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => context.read<AppState>().dismissExpiryWarning(),
+                    child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
   }
 }

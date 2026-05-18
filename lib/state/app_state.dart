@@ -29,6 +29,23 @@ class AppState extends ChangeNotifier {
   /// 是否需要显示助记词向导（首次激活后）
   bool showMnemonicWizard = false;
 
+  /// 即将过期提醒是否已被用户关闭（本次启动有效）
+  bool expiryWarningDismissed = false;
+
+  /// 距离过期还剩多少天（null=未知/不过期，<=0=已过期）
+  int? get daysUntilExpiry {
+    final s = license.safeStatus();
+    if (s == null || s.expireTime <= 0) return null;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final diff = s.expireTime - now;
+    return (diff / 86400).ceil();
+  }
+
+  void dismissExpiryWarning() {
+    expiryWarningDismissed = true;
+    notifyListeners();
+  }
+
   /// 全局助记词明文（仅在内存，解锁后填充）
   String? _globalPassphrase;
   String? _lastRawToken; // 用户原始输入的 token，用于备份恢复
@@ -852,6 +869,12 @@ class AppState extends ChangeNotifier {
   /// 检查激活是否过期，过期则跳转激活页
   bool _checkActivation() {
     if (!license.isActivated) {
+      stage = AppStage.needActivation;
+      notifyListeners();
+      return false;
+    }
+    final days = daysUntilExpiry;
+    if (days != null && days <= 0) {
       stage = AppStage.needActivation;
       notifyListeners();
       return false;
