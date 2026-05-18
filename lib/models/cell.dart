@@ -87,6 +87,7 @@ class Cell {
   String? settlementEvent;       // 盘点事件：盘盈/盘亏/盘平
   double? settlementAmount;      // 公式计算的应收/应付金额
   double? settledAmount;         // 用户实际结算金额
+  List<String> tags;             // 标签列表（水印显示）
 
   Cell({
     required this.cellId,
@@ -103,8 +104,10 @@ class Cell {
     this.settlementEvent,
     this.settlementAmount,
     this.settledAmount,
+    List<String>? tags,
   })  : parameters = parameters ?? [],
         records = records ?? [],
+        tags = tags ?? [],
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -245,6 +248,7 @@ class Cell {
         if (settlementEvent != null) 'settlement_event': settlementEvent,
         if (settlementAmount != null) 'settlement_amount': settlementAmount,
         if (settledAmount != null) 'settled_amount': settledAmount,
+        'tags': tags,
       };
 
   factory Cell.fromJson(Map<String, dynamic> j) => Cell(
@@ -268,6 +272,7 @@ class Cell {
         settlementEvent: j['settlement_event'] as String?,
         settlementAmount: (j['settlement_amount'] as num?)?.toDouble(),
         settledAmount: (j['settled_amount'] as num?)?.toDouble(),
+        tags: ((j['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
       );
 
   Cell copyWith({
@@ -281,6 +286,7 @@ class Cell {
     String? settlementEvent,
     double? settlementAmount,
     double? settledAmount,
+    List<String>? tags,
     bool clearSettlement = false,
   }) {
     return Cell(
@@ -298,6 +304,7 @@ class Cell {
       settlementEvent: clearSettlement ? null : (settlementEvent ?? this.settlementEvent),
       settlementAmount: clearSettlement ? null : (settlementAmount ?? this.settlementAmount),
       settledAmount: clearSettlement ? null : (settledAmount ?? this.settledAmount),
+      tags: tags ?? List.from(this.tags),
     );
   }
 }

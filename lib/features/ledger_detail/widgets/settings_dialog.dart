@@ -95,10 +95,13 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final contentWidth = screenWidth > 600 ? 480.0 : screenWidth * 0.85;
+
     return AlertDialog(
       title: const Text('参数设置'),
       content: SizedBox(
-        width: 480,
+        width: contentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -156,7 +159,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                         Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: SizedBox(
-                            width: 140,
+                            width: 100,
                             child: DropdownButtonFormField<String>(
                               value: ParameterUnit.all.contains(p.unit) ? p.unit : '',
                               isDense: true,
@@ -271,10 +274,13 @@ class _FormulaSettingsDialogState extends State<FormulaSettingsDialog> {
       );
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final contentWidth = screenWidth > 600 ? 460.0 : screenWidth * 0.85;
+
     return AlertDialog(
       title: const Text('盘点公式'),
       content: SizedBox(
-        width: 460,
+        width: contentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,10 +347,13 @@ class _LedgerSettingsDialogState extends State<LedgerSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final contentWidth = screenWidth > 500 ? 360.0 : screenWidth * 0.85;
+
     return AlertDialog(
       title: Text('账本设置 · ${widget.ledger.name}'),
       content: SizedBox(
-        width: 360,
+        width: contentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -450,10 +459,13 @@ class _RulesSettingsDialogState extends State<RulesSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final contentWidth = screenWidth > 500 ? 380.0 : screenWidth * 0.85;
+
     return AlertDialog(
       title: const Text('规则设置'),
       content: SizedBox(
-        width: 380,
+        width: contentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

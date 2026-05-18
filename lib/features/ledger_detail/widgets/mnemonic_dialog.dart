@@ -51,13 +51,18 @@ class _SetMnemonicDialogState extends State<SetMnemonicDialog> {
           : _mode == 1
               ? const Text('8 词助记词')
               : const Text('16 位密码'),
-      content: SizedBox(
-        width: 400,
-        child: _mode == 0
+      content: LayoutBuilder(
+        builder: (context, constraints) {
+          final contentWidth = constraints.maxWidth > 500 ? 400.0 : constraints.maxWidth * 0.9;
+          return SizedBox(
+            width: contentWidth,
+            child: _mode == 0
             ? _buildModeSelect()
             : _mode == 1
                 ? _buildWordMode()
                 : _buildPasswordMode(),
+          );
+        },
       ),
       actions: _mode == 0
           ? [
@@ -300,13 +305,18 @@ class _UnlockMnemonicDialogState extends State<UnlockMnemonicDialog> {
           : _mode == 1
               ? const Text('输入 8 词助记词')
               : const Text('输入密码'),
-      content: SizedBox(
-        width: 360,
-        child: _mode == 0
-            ? _buildModeSelect()
-            : _mode == 1
-                ? _buildWordInput()
-                : _buildPasswordInput(),
+      content: LayoutBuilder(
+        builder: (context, constraints) {
+          final contentWidth = constraints.maxWidth > 500 ? 360.0 : constraints.maxWidth * 0.9;
+          return SizedBox(
+            width: contentWidth,
+            child: _mode == 0
+                ? _buildModeSelect()
+                : _mode == 1
+                    ? _buildWordInput()
+                    : _buildPasswordInput(),
+          );
+        },
       ),
       actions: _mode == 0
           ? [

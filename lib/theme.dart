@@ -33,18 +33,7 @@ ThemeData buildLightTheme() {
   );
 }
 
-/// 宫格颜色（按 multiplier 着色）
-Color cellColorFor(double multiplier) {
-  if (multiplier >= 1.6) return const Color(0xFF2F4FE0);
-  if (multiplier >= 1.5) return const Color(0xFF5170F0);
-  if (multiplier >= 1.4) return const Color(0xFF6BD3F8);
-  if (multiplier >= 1.3) return const Color(0xFFFFB877);
-  if (multiplier >= 1.2) return const Color(0xFFFFF1B8);
-  if (multiplier >= 1.1) return const Color(0xFFFFFAD6);
-  return Colors.white;
-}
+/// 宫格颜色（统一白色）
+Color cellColorFor(double multiplier) => Colors.white;
 
-Color cellTextColorFor(double multiplier) {
-  if (multiplier >= 1.5) return Colors.white;
-  return Colors.black87;
-}
+Color cellTextColorFor(double multiplier) => Colors.black87;

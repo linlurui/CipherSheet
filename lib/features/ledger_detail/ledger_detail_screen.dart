@@ -12,6 +12,7 @@ import '../../models/ledger.dart';
 import '../../state/app_state.dart';
 import 'widgets/batch_generate_dialog.dart';
 import 'widgets/bill_cell.dart';
+import 'widgets/cell_detail_screen.dart';
 import 'widgets/settings_dialog.dart';
 
 class LedgerDetailScreen extends StatefulWidget {
@@ -24,6 +25,15 @@ class LedgerDetailScreen extends StatefulWidget {
 
 class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
   bool _ensuringDefaultBill = false;
+  String _cellFilter = '';
+  final _searchCtrl = TextEditingController();
+  _PredictionData? _prediction;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   /// 确保账本至少有一个默认 Bill（无 Bill 时自动创建）
   Future<void> _ensureDefaultBill() async {
@@ -106,10 +116,12 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
       builder: (ctx) {
         final fmt = NumberFormat('#,##0.##');
         final timeFmt = DateFormat('MM-dd HH:mm');
+        final screenWidth = MediaQuery.of(context).size.width;
+        final contentWidth = screenWidth > 500 ? 360.0 : screenWidth * 0.85;
         return AlertDialog(
           title: Text('${cell.title} · 记账清单'),
           content: SizedBox(
-            width: 360,
+            width: contentWidth,
             child: cell.records.isEmpty
                 ? const Text('暂无记录')
                 : ListView.builder(
@@ -159,6 +171,16 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     final state = context.read<AppState>();
     final view = state.ledgerView(widget.ledgerId);
     if (view == null) return;
+
+    // 记账金额为0的格子不用盘点
+    if (cell.totalAmount == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('记账金额为0，无需盘点')),
+        );
+      }
+      return;
+    }
 
     final formulas = view.ledger.formulas;
 
@@ -227,10 +249,13 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     }
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) {
+        final screenWidth = MediaQuery.of(ctx).size.width;
+        final contentWidth = screenWidth > 500 ? 320.0 : screenWidth * 0.85;
+        return AlertDialog(
         title: Text('参数 · ${cell.title}'),
         content: SizedBox(
-          width: 320,
+          width: contentWidth,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: ledgerParams.map((lp) {
@@ -260,7 +285,8 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('保存')),
         ],
-      ),
+      );
+      },
     );
     // 释放 controllers
     for (final c in ctrls.values) { c.dispose(); }
@@ -320,23 +346,83 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
   }
 
   Future<void> _onLongPressCell(Cell cell, Bill bill) async {
-    final ok = await showDialog<bool>(
+    final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('删除 ${cell.title}？'),
-        content: const Text('删除后无法恢复'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.label_outline, color: Colors.orange),
+              title: const Text('设置标签'),
+              onTap: () => Navigator.pop(ctx, 'tag'),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
+              title: Text('删除 ${cell.title}', style: TextStyle(color: Colors.red.shade400)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
       ),
     );
-    if (ok != true || !mounted) return;
-    await context.read<AppState>().deleteCell(widget.ledgerId, bill.billId, cell.cellId);
+    if (!mounted) return;
+    if (action == 'tag') {
+      await _showTagsDialog(cell, bill);
+    } else if (action == 'delete') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('删除 ${cell.title}？'),
+          content: const Text('删除后无法恢复'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      await context.read<AppState>().deleteCell(widget.ledgerId, bill.billId, cell.cellId);
+    }
+  }
+
+  Future<void> _showTagsDialog(Cell cell, Bill bill) async {
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final ctrl = TextEditingController(
+          text: cell.tags.isNotEmpty ? cell.tags.first : '',
+        );
+        return AlertDialog(
+          title: Text('格子 ${cell.title} 标签'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: '输入标签名，留空则清除标签',
+            ),
+            onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+    if (tag == null || !mounted) return;
+    final newTags = tag.isEmpty ? <String>[] : [tag];
+    await context.read<AppState>().updateCell(
+      widget.ledgerId, bill.billId,
+      cell.copyWith(tags: newTags),
+    );
   }
 
   Bill? _defaultBill() {
@@ -515,6 +601,74 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     }
   }
 
+  /// 一键清零：清除该账本的所有记账记录、盘点记录、结算记录
+  Future<void> _clearAllData(LedgerView view) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认一键清零？'),
+        content: const Text(
+          '此操作将清除该账本的所有：\n'
+          '· 记账记录（所有单元格的进出明细）\n'
+          '· 盘点记录（所有结算事件）\n'
+          '· 结算历史\n\n'
+          '此操作不可恢复，请确认已备份重要数据。',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确认清零'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (!mounted) return;
+
+    final state = context.read<AppState>();
+
+    // 如果关闭了单元参数设置，清零同时重置所有单元格的 parameters 和 multiplier 到账本默认
+    final disableCellParams = !view.ledger.rules.enableCellParams;
+    final defaultParams = view.ledger.parameters
+        .map((p) => CellParameter(key: p.key, value: p.value, unit: p.unit))
+        .toList();
+
+    // 清除所有单元格的 records 和盘点/结算状态
+    // 关闭单元参数时：同步重置 parameters + multiplier 至默认值（确保所有格子显示相同颜色/参数）
+    for (final bill in view.bills) {
+      for (final cell in bill.cells) {
+        final needsParamReset = disableCellParams &&
+            (cell.multiplier != 1.0 ||
+                cell.parameters.map((p) => '${p.key}:${p.value}').join(',') !=
+                    defaultParams.map((p) => '${p.key}:${p.value}').join(','));
+        if (cell.records.isNotEmpty || cell.settlementEvent != null || needsParamReset) {
+          await state.updateCell(
+            widget.ledgerId,
+            bill.billId,
+            cell.copyWith(
+              records: [],
+              clearSettlement: true,
+              multiplier: disableCellParams ? 1.0 : null,
+              parameters: disableCellParams
+                  ? defaultParams.map((p) => CellParameter(key: p.key, value: p.value, unit: p.unit)).toList()
+                  : null,
+            ),
+          );
+        }
+      }
+    }
+    // 清除结算历史
+    await state.clearLedgerSettlements(widget.ledgerId);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('清零完成')),
+      );
+    }
+  }
+
   Future<void> _batchSettle(Bill bill, LedgerView view) async {
     final formulas = view.ledger.formulas;
     final hasSurplus = formulas[SettlementEvent.surplus]?.isNotEmpty ?? false;
@@ -553,6 +707,49 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
         amount: entry.value.amount,
       );
     }
+  }
+
+  /// 计算盘点预测（汇总视角）：
+  ///   盘盈预测 = 所有格子原始金额之和（全部盘盈时的总收入）
+  ///   盘亏预测 = -(触发格盘亏公式结果)，即需赔付的金额（负值）
+  ///   盈亏预测 = 盘盈预测 + 盘亏预测（盘盈 - 赔付）
+  _PredictionData? _calculatePrediction(Cell triggerCell, LedgerView view) {
+    final formulas = view.ledger.formulas;
+
+    // 盘盈预测 = 所有格子原始金额之和
+    double grandTotal = 0;
+    for (final bill in view.bills) {
+      for (final cell in bill.cells) {
+        grandTotal += cell.totalAmount;
+      }
+    }
+
+    // 触发格盘亏公式结果（赔付额，正值）
+    final deficitF = formulas[SettlementEvent.deficit] ?? '';
+    final deficitPayout = deficitF.isEmpty
+        ? triggerCell.totalAmount * triggerCell.multiplier
+        : triggerCell.calculatedAmount(ledgerFormula: deficitF).abs();
+
+    // 盘亏预测 = 负的赔付额
+    final deficitCalc = -deficitPayout;
+
+    // 盈亏预测 = 总收入 - 赔付额
+    final profit = grandTotal - deficitPayout;
+
+    return _PredictionData(
+      cellTitle: triggerCell.title,
+      surplusAmount: grandTotal,
+      deficitAmount: deficitCalc,
+      totalAmount: triggerCell.totalAmount,
+      profit: profit,
+    );
+  }
+
+  /// 点击单元格预测图标：对该格子单独预测盘盈/盘亏两种情形
+  void _onPredictCell(Cell cell, Bill bill, LedgerView view) {
+    setState(() {
+      _prediction = _calculatePrediction(cell, view);
+    });
   }
 
   Future<void> _openSettings(LedgerView view) async {
@@ -597,6 +794,261 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     );
   }
 
+  /// 处理快捷记账菜单
+  Future<void> _handleQuickAdd(String type, Bill bill, LedgerView view) async {
+    switch (type) {
+      case 'quick':
+        // 快捷记账：序号+金额两个输入框
+        await _showQuickAddDialog(bill, view);
+        break;
+      case 'batch':
+        // 批量记账：多选单元格+统一金额
+        await _showBatchAddDialog(bill, view);
+        break;
+      case 'tag':
+        // 标签记账 - 弹出选择单元格并添加标签
+        await _showTagAddDialog(bill, view);
+        break;
+      case 'smart':
+        // 智能记账
+        await _showSmartAddDialog(bill, view);
+        break;
+    }
+  }
+
+  /// 快捷记账对话框：序号 + 金额
+  Future<void> _showQuickAddDialog(Bill bill, LedgerView view) async {
+    final indexCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('快捷记账'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: indexCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '序号',
+                      hintText: '如: 01',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: amountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '金额',
+                      hintText: '如: 100',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              final index = int.tryParse(indexCtrl.text);
+              final amount = double.tryParse(amountCtrl.text);
+              if (index != null && amount != null) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final index = int.tryParse(indexCtrl.text);
+    final amount = double.tryParse(amountCtrl.text);
+    if (index == null || amount == null) return;
+
+    // 查找对应序号的单元格
+    final targetCell = bill.cells.firstWhere(
+      (c) => c.orderIndex == index,
+      orElse: () => bill.cells.first,
+    );
+    if (targetCell.orderIndex != index) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('未找到序号为 $index 的单元格')),
+        );
+      }
+      return;
+    }
+
+    await context.read<AppState>().addCellRecord(
+      widget.ledgerId, bill.billId, targetCell.cellId,
+      amount: amount,
+      remarks: '快捷记账',
+    );
+  }
+
+  /// 批量记账对话框：多选单元格 + 统一金额
+  Future<void> _showBatchAddDialog(Bill bill, LedgerView view) async {
+    final result = await showDialog<_BatchAddResult?>(
+      context: context,
+      builder: (ctx) => _BatchAddDialog(cells: bill.cells),
+    );
+
+    if (result == null || !mounted) return;
+
+    final state = context.read<AppState>();
+    for (final cellId in result.selectedCellIds) {
+      await state.addCellRecord(
+        widget.ledgerId, bill.billId, cellId,
+        amount: result.amount,
+        remarks: '批量记账',
+      );
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已记账 ${result.selectedCellIds.length} 个单元格')),
+      );
+    }
+  }
+
+  /// 标签记账对话框：多选标签 + 输入金额 → 一键记账
+  Future<void> _showTagAddDialog(Bill bill, LedgerView view) async {
+    final allTags = <String>{for (var c in bill.cells) ...c.tags}.toList()..sort();
+
+    if (allTags.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前账本没有标签，请先给单元格添加标签')),
+        );
+      }
+      return;
+    }
+
+    final result = await showDialog<_TagAddResult>(
+      context: context,
+      builder: (ctx) => _TagAddDialog(allTags: allTags, bill: bill),
+    );
+
+    if (result == null || !mounted) return;
+
+    final state = context.read<AppState>();
+    final targetCells = bill.cells
+        .where((c) => c.tags.any((t) => result.selectedTags.contains(t)))
+        .toList();
+
+    for (final cell in targetCells) {
+      await state.addCellRecord(
+        widget.ledgerId, bill.billId, cell.cellId,
+        amount: result.amount,
+        remarks: '标签记账: ${result.selectedTags.join('/')}',
+      );
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已为 ${targetCells.length} 个单元格记账')),
+      );
+    }
+  }
+
+  /// 智能记账对话框
+  Future<void> _showSmartAddDialog(Bill bill, LedgerView view) async {
+    final textCtrl = TextEditingController();
+    final result = await showDialog<_SmartAddResult?>(
+      context: context,
+      builder: (ctx) => _SmartAddDialog(
+        cells: bill.cells,
+        onPreview: (text) => _parseSmartAddText(text, bill.cells),
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    // 应用记账结果
+    final state = context.read<AppState>();
+    for (final rec in result.records) {
+      if (rec.amount != 0) {
+        await state.addCellRecord(
+          widget.ledgerId, bill.billId, rec.cellId,
+          amount: rec.amount,
+          remarks: '智能记账',
+        );
+      }
+    }
+  }
+
+  /// 解析智能记账文本，返回列表（允许同一格多条，用于重复检测）
+  /// 支持格式：
+  /// - "11.47.各20" / "5，34，各15元" / "5 34 各15" → 各格子=指定金额
+  /// - "36号20元" / "36号 20" → 36号=20
+  /// - "22号40元，4号5元"
+  List<_ParsedRecord> _parseSmartAddText(String text, List<Cell> cells) {
+    final result = <_ParsedRecord>[];
+    final cellMap = {for (var c in cells) c.title: c.cellId};
+
+    // 按句子终止符分段（。！；换行），保留各段独立解析避免跨段误匹配
+    final segments = text
+        .split(RegExp(r'[。！；\n]'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty);
+
+    for (final segment in segments) {
+      var remaining = segment;
+
+      // ── 步骤1：提取 "N(分隔符)N...各/每X" 格式 ──
+      // 分隔符允许：. ， , 、空格（不跨越中文标点句号）
+      final eachRe = RegExp(r'((?:\d+[.,，、\s]+)+)(?:各|每)(\d+(?:\.\d+)?)元?');
+      for (final m in eachRe.allMatches(segment)) {
+        final amount = double.tryParse(m.group(2)!) ?? 0;
+        for (final n in RegExp(r'\d+').allMatches(m.group(1)!)) {
+          final title = n.group(0)!.padLeft(2, '0');
+          if (cellMap.containsKey(title)) {
+            result.add(_ParsedRecord(cellMap[title]!, amount));
+          }
+        }
+      }
+      remaining = remaining.replaceAll(eachRe, '');
+
+      // ── 步骤2：提取 "N号[分隔]X元" 格式 ──
+      final numRe = RegExp(r'(\d{1,3})号[，,\s]*(\d+(?:\.\d+)?)元?');
+      for (final m in numRe.allMatches(remaining)) {
+        final title = m.group(1)!.padLeft(2, '0');
+        final amount = double.tryParse(m.group(2)!) ?? 0;
+        if (cellMap.containsKey(title)) {
+          result.add(_ParsedRecord(cellMap[title]!, amount));
+        }
+      }
+      remaining = remaining.replaceAll(numRe, '');
+
+      // ── 步骤3：剩余 "N X" 简单配对（N是有效格子编号）──
+      final simpleRe = RegExp(r'\b(\d{1,3})\s+(\d+(?:\.\d+)?)\s*元?');
+      for (final m in simpleRe.allMatches(remaining)) {
+        final title = m.group(1)!.padLeft(2, '0');
+        final amount = double.tryParse(m.group(2)!) ?? 0;
+        if (cellMap.containsKey(title)) {
+          result.add(_ParsedRecord(cellMap[title]!, amount));
+        }
+      }
+    }
+
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -615,14 +1067,119 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(view.ledger.name),
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 600;
+            return Row(
+              children: [
+                // 账本名称（使用 Flexible 防止溢出）
+                Flexible(
+                  child: Text(
+                    view.ledger.name,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 搜索框（宽屏显示，窄屏点击搜索图标展开）
+                if (isWide)
+                  SizedBox(
+                    width: 120,
+                    height: 36,
+                    child: TextField(
+                        controller: _searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: '搜索单元格...',
+                          prefixIcon: const Icon(Icons.search, size: 18),
+                          suffixIcon: _searchCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() => _cellFilter = '');
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.1),
+                        ),
+                        onChanged: (v) => setState(() => _cellFilter = v),
+                      ),
+                    )
+                else
+                  // 窄屏：搜索图标点击展开
+                  IconButton(
+                    icon: const Icon(Icons.search, size: 20),
+                    onPressed: () {
+                      showSearch(
+                        context: context,
+                        delegate: _CellSearchDelegate(
+                          cells: bill?.cells ?? [],
+                          onSelected: (cell) {
+                            _cellFilter = cell.title;
+                            _searchCtrl.text = cell.title;
+                            setState(() {});
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                // 窄屏：使用 Wrap 防止溢出
+                if (!isWide && bill != null)
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      if (view.ledger.rules.enableBatchSettle)
+                        IconButton(
+                          tooltip: '一键盘点',
+                          icon: const Icon(Icons.playlist_add_check, size: 20),
+                          onPressed: () => _batchSettle(bill, view),
+                        ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.add_circle_outline, size: 20),
+                        tooltip: '快捷记账',
+                        onSelected: (type) => _handleQuickAdd(type, bill, view),
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(value: 'quick', child: Text('快捷记账')),
+                          const PopupMenuItem(value: 'batch', child: Text('批量记账')),
+                          const PopupMenuItem(value: 'tag', child: Text('标签记账')),
+                          const PopupMenuItem(value: 'smart', child: Text('智能记账')),
+                        ],
+                      ),
+                    ],
+                  ),
+                // 宽屏：直接显示按钮
+                if (isWide) ...[
+                  const SizedBox(width: 8),
+                  if (bill != null && view.ledger.rules.enableBatchSettle)
+                    IconButton(
+                      tooltip: '一键盘点',
+                      icon: const Icon(Icons.playlist_add_check, size: 20),
+                      onPressed: () => _batchSettle(bill, view),
+                    ),
+                  if (bill != null)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                      tooltip: '快捷记账',
+                      onSelected: (type) => _handleQuickAdd(type, bill, view),
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'quick', child: Text('快捷记账')),
+                        const PopupMenuItem(value: 'batch', child: Text('批量记账')),
+                        const PopupMenuItem(value: 'tag', child: Text('标签记账')),
+                        const PopupMenuItem(value: 'smart', child: Text('智能记账')),
+                      ],
+                    ),
+                ],
+              ],
+            );
+          },
+        ),
         actions: [
-          if (view.ledger.rules.enableBatchSettle && bill != null)
-            IconButton(
-              tooltip: '一键盘点',
-              icon: const Icon(Icons.playlist_add_check),
-              onPressed: () => _batchSettle(bill!, view),
-            ),
           IconButton(
             tooltip: '设置',
             icon: const Icon(Icons.settings_outlined),
@@ -648,6 +1205,9 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                 case 'import':
                   _importData();
                   break;
+                case 'clear_all':
+                  _clearAllData(view);
+                  break;
               }
             },
             itemBuilder: (_) => [
@@ -658,19 +1218,30 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'export', child: Text('导出数据')),
               const PopupMenuItem(value: 'import', child: Text('导入数据')),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'clear_all',
+                child: Text('一键清零', style: TextStyle(color: Colors.red.shade400)),
+              ),
             ],
           ),
         ],
       ),
       body: Column(
         children: [
-          _SummaryCard(view: view, locked: locked),
+          _SummaryCard(
+            view: view,
+            bill: bill,
+            locked: locked,
+            prediction: _prediction,
+          ),
           const SizedBox(height: 8),
           Expanded(
             child: bill == null
                 ? const Center(child: CircularProgressIndicator())
                 : _CellGrid(
                     bill: bill,
+                    filter: _cellFilter,
                     locked: locked,
                     interestRate: view.ledger.interestRate,
                     rules: view.ledger.rules,
@@ -680,6 +1251,7 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                     onSettle: (cell) => _openCellSettlement(cell, bill!),
                     onMarkSettled: (cell) => _markCellSettled(cell, bill!),
                     onSetParams: (cell) => _openCellParams(cell, bill!),
+                    onPredict: (cell) => _onPredictCell(cell, bill, view),
                     onAdd: _addCell,
                   ),
           ),
@@ -689,11 +1261,19 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
   }
 }
 
-/// 总计卡片：总计/合计/盈亏 + 盘点状态汇总 + 账本参数
+/// 总计卡片：总计/合计/盈亏 + 搜索过滤 + 盘点预测
 class _SummaryCard extends StatefulWidget {
   final LedgerView view;
+  final Bill? bill;
   final bool locked;
-  const _SummaryCard({required this.view, required this.locked});
+  final _PredictionData? prediction;
+
+  const _SummaryCard({
+    required this.view,
+    this.bill,
+    required this.locked,
+    this.prediction,
+  });
 
   @override
   State<_SummaryCard> createState() => _SummaryCardState();
@@ -705,39 +1285,41 @@ class _SummaryCardState extends State<_SummaryCard> {
   LedgerView get view => widget.view;
   bool get locked => widget.locked;
 
+  @override
+  void didUpdateWidget(_SummaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 有新预测数据时自动展开
+    if (widget.prediction != null && widget.prediction != oldWidget.prediction) {
+      setState(() => _expanded = true);
+    }
+  }
+
+
   /// 计算汇总数据
   _SummaryData _calculateSummary() {
-    // 汇总时用盘亏公式估算未盘点格子（兼容旧 'default' key）
-    final ledgerFormula = view.ledger.formulas[SettlementEvent.deficit]
-        ?? view.ledger.formulas['default'];
+    final cells = _getFilteredCells();
     int surplusCount = 0, deficitCount = 0, evenCount = 0, unsettledCount = 0;
     double totalAmount = 0;
     double totalCalculated = 0;
 
-    for (final bill in view.bills) {
-      for (final cell in bill.cells) {
-        final cellTotal = cell.totalAmount;
-        totalAmount += cellTotal;
+    for (final cell in cells) {
+      final cellTotal = cell.totalAmount;
+      totalAmount += cellTotal;
 
-        // 获取计算金额（已盘点用结算金额，未盘点用公式计算）
-        double calculated;
-        if (cell.settlementEvent != null && cell.settlementAmount != null) {
-          calculated = cell.settlementAmount!;
-        } else {
-          calculated = cell.calculatedAmount(ledgerFormula: ledgerFormula);
-        }
-        totalCalculated += calculated;
+      // 获取计算金额（已盘点用结算金额，未盘点不计入合计）
+      if (cell.settlementEvent != null && cell.settlementAmount != null) {
+        totalCalculated += cell.settlementAmount!;
+      }
 
-        // 统计盘点状态
-        if (cell.settlementEvent == null) {
-          unsettledCount++;
-        } else if (cell.settlementEvent == SettlementEvent.surplus) {
-          surplusCount++;
-        } else if (cell.settlementEvent == SettlementEvent.deficit) {
-          deficitCount++;
-        } else {
-          evenCount++;
-        }
+      // 统计盘点状态
+      if (cell.settlementEvent == null) {
+        unsettledCount++;
+      } else if (cell.settlementEvent == SettlementEvent.surplus) {
+        surplusCount++;
+      } else if (cell.settlementEvent == SettlementEvent.deficit) {
+        deficitCount++;
+      } else {
+        evenCount++;
       }
     }
 
@@ -754,11 +1336,20 @@ class _SummaryCardState extends State<_SummaryCard> {
     );
   }
 
+  List<Cell> _getFilteredCells() {
+    // 从 view 获取所有 cells（不过滤，保持统计完整性）
+    final List<Cell> cells = [];
+    for (final bill in view.bills) {
+      cells.addAll(bill.cells);
+    }
+    return cells;
+  }
+
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.##');
     final data = locked ? null : _calculateSummary();
-    final params = view.ledger.parameters;
+    final pred = widget.prediction;
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -772,10 +1363,10 @@ class _SummaryCardState extends State<_SummaryCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 三列数据：总计/合计/盈亏，点击展开/收起盘点详情
+          // 三列数据：总计/合计/盈亏（点击展开/收起预测）
           GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
             behavior: HitTestBehavior.opaque,
+            onTap: pred != null ? () => setState(() => _expanded = !_expanded) : null,
             child: Row(
               children: [
                 Expanded(
@@ -807,38 +1398,50 @@ class _SummaryCardState extends State<_SummaryCard> {
                     showSign: true,
                   ),
                 ),
-                const SizedBox(width: 4),
-                Icon(
-                  _expanded ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                  color: Colors.black38,
-                ),
+                if (pred != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: Colors.black38,
+                    ),
+                  ),
               ],
             ),
           ),
-          // 可展开的盘点状态汇总
-          if (_expanded && data != null) ...[
+          // 盘点预测区域：有数据且展开时显示
+          if (pred != null && _expanded) ...[
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 12),
+            const Text(
+              '盘点预测',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _StatusBadge(label: '盘盈', count: data.surplusCount, color: Colors.green),
-                _StatusBadge(label: '盘平', count: data.evenCount, color: Colors.blue),
-                _StatusBadge(label: '盘亏', count: data.deficitCount, color: Colors.red),
-                _StatusBadge(label: '未盘', count: data.unsettledCount, color: Colors.grey),
+                _PredictionBadge(
+                  label: '盘盈预测',
+                  amount: pred.surplusAmount,
+                  color: Colors.green,
+                  locked: locked,
+                ),
+                _PredictionBadge(
+                  label: '盘亏预测',
+                  amount: pred.deficitAmount,
+                  color: Colors.red,
+                  locked: locked,
+                ),
+                _PredictionBadge(
+                  label: '盈亏预测',
+                  amount: pred.profit,
+                  color: Colors.blue,
+                  locked: locked,
+                ),
               ],
-            ),
-          ],
-          if (params.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: params.map((p) => _ParamChip(parameter: p)).toList(),
             ),
           ],
         ],
@@ -868,6 +1471,74 @@ class _SummaryData {
   });
 }
 
+// ──────────────────────────────────────────────────────────────
+// 单元格搜索委托（移动端搜索界面）
+class _CellSearchDelegate extends SearchDelegate<Cell> {
+  final List<Cell> cells;
+  final void Function(Cell) onSelected;
+
+  _CellSearchDelegate({
+    required this.cells,
+    required this.onSelected,
+  });
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+    IconButton(
+      icon: const Icon(Icons.clear),
+      onPressed: () => query = '',
+    ),
+  ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, cells.first),
+  );
+
+  @override
+  Widget buildResults(BuildContext context) => buildSuggestions(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    final filtered = query.isEmpty
+        ? cells
+        : cells.where((c) => c.title.toLowerCase().contains(query.toLowerCase())).toList();
+
+    return ListView.builder(
+      itemCount: filtered.length,
+      itemBuilder: (_, i) {
+        final c = filtered[i];
+        return ListTile(
+          title: Text(c.title),
+          subtitle: Text('记账: ${c.totalAmount.toStringAsFixed(2)}'),
+          onTap: () {
+            onSelected(c);
+            close(context, c);
+          },
+        );
+      },
+    );
+  }
+}
+
+/// 预测数据（单格预测：盘盈/盘亏两种情形下的结算值）
+class _PredictionData {
+  final String cellTitle;       // 被预测的格子编号
+  final double surplusAmount;   // 若盘盈：应收/应付金额
+  final double deficitAmount;   // 若盘亏：应收/应付金额（负值）
+  final double totalAmount;     // 格子当前合计金额
+  final double profit;          // 盘盈情形下的净盈亏 = surplusAmount - totalAmount
+
+  _PredictionData({
+    required this.cellTitle,
+    required this.surplusAmount,
+    required this.deficitAmount,
+    required this.totalAmount,
+    required this.profit,
+  });
+}
+
 /// 金额列
 class _AmountColumn extends StatelessWidget {
   final String label;
@@ -891,16 +1562,19 @@ class _AmountColumn extends StatelessWidget {
       children: [
         Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(
-          locked
-              ? '••••'
-              : (showSign && amount != null
-                  ? '${amount! >= 0 ? '+' : ''}${fmt.format(amount!)}'
-                  : fmt.format(amount ?? 0)),
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: color,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            locked
+                ? '••••'
+                : (showSign && amount != null
+                    ? '${amount! >= 0 ? '+' : ''}${fmt.format(amount!)}'
+                    : fmt.format(amount ?? 0)),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
         ),
       ],
@@ -947,6 +1621,52 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
+/// 预测金额标签（显示金额而非计数）
+class _PredictionBadge extends StatelessWidget {
+  final String label;
+  final double? amount;
+  final MaterialColor color;
+  final bool locked;
+
+  const _PredictionBadge({
+    required this.label,
+    this.amount,
+    required this.color,
+    required this.locked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.##');
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.shade200),
+          ),
+          child: Text(
+            locked
+                ? '••••'
+                : (amount != null
+                    ? '${amount! > 0 ? "+" : ""}${fmt.format(amount!)}'
+                    : '-'),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.shade700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 11, color: color.shade700)),
+      ],
+    );
+  }
+}
+
 class _ParamChip extends StatelessWidget {
   final LedgerParameter parameter;
   const _ParamChip({required this.parameter});
@@ -971,6 +1691,7 @@ class _ParamChip extends StatelessWidget {
 
 class _CellGrid extends StatelessWidget {
   final Bill bill;
+  final String filter;
   final bool locked;
   final double interestRate;
   final LedgerRules rules;
@@ -980,9 +1701,11 @@ class _CellGrid extends StatelessWidget {
   final void Function(Cell) onSettle;
   final void Function(Cell) onMarkSettled;
   final void Function(Cell) onSetParams;
+  final void Function(Cell)? onPredict;
   final VoidCallback onAdd;
   const _CellGrid({
     required this.bill,
+    this.filter = '',
     required this.locked,
     required this.interestRate,
     required this.rules,
@@ -992,12 +1715,17 @@ class _CellGrid extends StatelessWidget {
     required this.onSettle,
     required this.onMarkSettled,
     required this.onSetParams,
+    this.onPredict,
     required this.onAdd,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cells = bill.sortedCells;
+    final filterLower = filter.trim().toLowerCase();
+    final cells = bill.sortedCells.where((c) {
+      if (filterLower.isEmpty) return true;
+      return c.title.toLowerCase().contains(filterLower);
+    }).toList();
     if (cells.isEmpty) {
       return Center(
         child: Column(
@@ -1043,6 +1771,7 @@ class _CellGrid extends StatelessWidget {
       itemBuilder: (ctx, i) {
         final c = cells[i];
         return BillCell(
+          key: ValueKey(c.cellId),
           cell: c,
           locked: locked,
           interestRate: interestRate,
@@ -1058,6 +1787,8 @@ class _CellGrid extends StatelessWidget {
           onMarkSettled: rules.enableBatchSettle ? null : () => onMarkSettled(c),
           // 参数图标：enableCellParams=false 时隐藏
           onSetParams: rules.enableCellParams ? () => onSetParams(c) : null,
+          // 预测图标
+          onPredict: onPredict != null ? () => onPredict!(c) : null,
         );
       },
     );
@@ -1140,10 +1871,13 @@ class _SettleDialogState extends State<_SettleDialog> {
       );
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final contentWidth = screenWidth > 500 ? 320.0 : screenWidth * 0.85;
+
     return AlertDialog(
       title: Text('盘点 · ${widget.cell.title}'),
       content: SizedBox(
-        width: 320,
+        width: contentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1210,6 +1944,439 @@ class _SettleDialogState extends State<_SettleDialog> {
         ),
       ],
     );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// 智能记账结果
+// ──────────────────────────────────────────────────────────────
+class _ParsedRecord {
+  final String cellId;
+  final double amount;
+  const _ParsedRecord(this.cellId, this.amount);
+}
+
+class _TagAddResult {
+  final Set<String> selectedTags;
+  final double amount;
+  const _TagAddResult({required this.selectedTags, required this.amount});
+}
+
+class _TagAddDialog extends StatefulWidget {
+  final List<String> allTags;
+  final Bill bill;
+  const _TagAddDialog({required this.allTags, required this.bill});
+
+  @override
+  State<_TagAddDialog> createState() => _TagAddDialogState();
+}
+
+class _TagAddDialogState extends State<_TagAddDialog> {
+  final Set<String> _selected = {};
+  final _amountCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  int get _cellCount => widget.bill.cells
+      .where((c) => c.tags.any(_selected.contains))
+      .length;
+
+  void _confirm() {
+    if (_selected.isEmpty) return;
+    final amount = double.tryParse(_amountCtrl.text);
+    if (amount == null) return;
+    Navigator.pop(context, _TagAddResult(selectedTags: _selected, amount: amount));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('标签记账'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: widget.allTags.map((tag) {
+                final selected = _selected.contains(tag);
+                final count = widget.bill.cells.where((c) => c.tags.contains(tag)).length;
+                return FilterChip(
+                  label: Text('$tag  ($count)'),
+                  selected: selected,
+                  onSelected: (v) => setState(() {
+                    if (v) _selected.add(tag); else _selected.remove(tag);
+                  }),
+                  selectedColor: Colors.orange.withValues(alpha: 0.2),
+                  checkmarkColor: Colors.orange,
+                  labelStyle: TextStyle(
+                    color: selected ? Colors.orange : Colors.black87,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _amountCtrl,
+              autofocus: widget.allTags.length == 1,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: '金额',
+                hintText: '输入金额',
+                isDense: true,
+                suffixText: _selected.isEmpty ? '' : '将记账 $_cellCount 个格子',
+              ),
+              onSubmitted: (_) => _confirm(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        FilledButton(
+          onPressed: _selected.isEmpty ? null : _confirm,
+          child: const Text('确定记账'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SmartAddResult {
+  final List<_ParsedRecord> records;
+  const _SmartAddResult(this.records);
+}
+
+// ──────────────────────────────────────────────────────────────
+// 批量记账结果
+// ──────────────────────────────────────────────────────────────
+class _BatchAddResult {
+  final List<String> selectedCellIds;
+  final double amount;
+  const _BatchAddResult({required this.selectedCellIds, required this.amount});
+}
+
+// ──────────────────────────────────────────────────────────────
+// 批量记账弹框
+// ──────────────────────────────────────────────────────────────
+class _BatchAddDialog extends StatefulWidget {
+  final List<Cell> cells;
+  const _BatchAddDialog({required this.cells});
+
+  @override
+  State<_BatchAddDialog> createState() => _BatchAddDialogState();
+}
+
+class _BatchAddDialogState extends State<_BatchAddDialog> {
+  final Set<String> _selected = {};
+  final _amountCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cells = widget.cells;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dialogWidth = screenWidth > 500 ? 400.0 : screenWidth * 0.9;
+    final dialogHeight = MediaQuery.of(context).size.height * 0.6;
+
+    return AlertDialog(
+      title: const Text('批量记账'),
+      content: SizedBox(
+        width: dialogWidth,
+        height: dialogHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 金额输入
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+              decoration: const InputDecoration(
+                labelText: '统一金额',
+                hintText: '输入要记到所有选中单元格的金额',
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text('选择单元格 (${_selected.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() => _selected.addAll(cells.map((c) => c.cellId))),
+                  child: const Text('全选'),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _selected.clear()),
+                  child: const Text('清空'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            // 单元格小格子列表
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 根据对话框宽度自适应列数
+                  final width = constraints.maxWidth;
+                  int crossAxisCount;
+                  if (width >= 400) {
+                    crossAxisCount = 5;
+                  } else if (width >= 320) {
+                    crossAxisCount = 4;
+                  } else {
+                    crossAxisCount = 3;
+                  }
+                  return GridView.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.5,
+                    ),
+                itemCount: cells.length,
+                itemBuilder: (_, i) {
+                  final c = cells[i];
+                  final isSelected = _selected.contains(c.cellId);
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selected.remove(c.cellId);
+                        } else {
+                          _selected.add(c.cellId);
+                        }
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey.shade400,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          c.title,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        FilledButton(
+          onPressed: _selected.isEmpty || _amountCtrl.text.isEmpty
+              ? null
+              : () {
+                  final amount = double.tryParse(_amountCtrl.text);
+                  if (amount != null) {
+                    Navigator.pop(context, _BatchAddResult(
+                      selectedCellIds: _selected.toList(),
+                      amount: amount,
+                    ));
+                  }
+                },
+          child: const Text('确定记账'),
+        ),
+      ],
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// 智能记账弹框
+// ──────────────────────────────────────────────────────────────
+class _SmartAddDialog extends StatefulWidget {
+  final List<Cell> cells;
+  final List<_ParsedRecord> Function(String) onPreview;
+
+  const _SmartAddDialog({
+    required this.cells,
+    required this.onPreview,
+  });
+
+  @override
+  State<_SmartAddDialog> createState() => _SmartAddDialogState();
+}
+
+class _SmartAddDialogState extends State<_SmartAddDialog> {
+  final _textCtrl = TextEditingController();
+  List<_ParsedRecord> _preview = [];
+  final Set<int> _removed = {};
+
+  List<_ParsedRecord> get _activePreview =>
+      [for (var i = 0; i < _preview.length; i++) if (!_removed.contains(i)) _preview[i]];
+
+  void _updatePreview() {
+    setState(() {
+      _preview = widget.onPreview(_textCtrl.text);
+      _removed.clear();
+    });
+  }
+
+  /// 检测重复：活跃条目中同一 cellId 出现超过1次的 index 集合
+  Set<int> _duplicateIndices() {
+    final seen = <String>{};
+    final dupes = <String>{};
+    final activeIndices = [for (var i = 0; i < _preview.length; i++) if (!_removed.contains(i)) i];
+    for (final i in activeIndices) {
+      final id = _preview[i].cellId;
+      if (!seen.add(id)) dupes.add(id);
+    }
+    return {
+      for (final i in activeIndices)
+        if (dupes.contains(_preview[i].cellId)) i,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.##');
+    final cellMap = {for (var c in widget.cells) c.cellId: c};
+    final active = _activePreview;
+    final dupeIndices = _duplicateIndices();
+    final hasDupes = dupeIndices.isNotEmpty;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dialogWidth = screenWidth > 600 ? 500.0 : screenWidth * 0.9;
+    final dialogHeight = MediaQuery.of(context).size.height * 0.7;
+
+    return AlertDialog(
+      title: const Text('智能记账'),
+      content: SizedBox(
+        width: dialogWidth,
+        height: dialogHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _textCtrl,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: '粘贴文本...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onChanged: (_) => _updatePreview(),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('预览结果', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('${active.length}条记录', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+              ],
+            ),
+            if (hasDupes) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 16, color: Colors.red.shade700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '存在重复格子，请移除重复行后再确认记账',
+                        style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            Expanded(
+              child: active.isEmpty
+                  ? const Center(child: Text('暂无匹配', style: TextStyle(color: Colors.black38)))
+                  : ListView.builder(
+                      itemCount: _preview.length,
+                      itemBuilder: (_, rawIndex) {
+                        if (_removed.contains(rawIndex)) return const SizedBox.shrink();
+                        final rec = _preview[rawIndex];
+                        final cell = cellMap[rec.cellId];
+                        if (cell == null) return const SizedBox.shrink();
+                        final isDupe = dupeIndices.contains(rawIndex);
+                        return Container(
+                          color: isDupe ? Colors.red.shade50 : null,
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              cell.title,
+                              style: TextStyle(
+                                color: isDupe ? Colors.red.shade700 : null,
+                                fontWeight: isDupe ? FontWeight.w600 : null,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '金额: ${fmt.format(rec.amount)}',
+                              style: TextStyle(color: isDupe ? Colors.red.shade400 : null),
+                            ),
+                            trailing: TextButton(
+                              onPressed: () => setState(() => _removed.add(rawIndex)),
+                              child: Text(
+                                '移除',
+                                style: TextStyle(color: isDupe ? Colors.red.shade600 : null),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        FilledButton(
+          onPressed: (active.isEmpty || hasDupes)
+              ? null
+              : () => Navigator.pop(context, _SmartAddResult(active)),
+          child: const Text('确认记账'),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    super.dispose();
   }
 }
 

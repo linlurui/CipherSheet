@@ -12,11 +12,13 @@ class CellDetailScreen extends StatefulWidget {
   final String ledgerId;
   final String billId;
   final String cellId;
+  final int initialTab;
   const CellDetailScreen({
     super.key,
     required this.ledgerId,
     required this.billId,
     required this.cellId,
+    this.initialTab = 0,
   });
 
   @override
@@ -30,7 +32,8 @@ class _CellDetailScreenState extends State<CellDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this,
+        initialIndex: widget.initialTab.clamp(0, 3));
   }
 
   @override
@@ -65,10 +68,13 @@ class _CellDetailScreenState extends State<CellDetailScreen>
         title: Text('格子 ${cell.title}'),
         bottom: TabBar(
           controller: _tabCtrl,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: '记账记录', icon: Icon(Icons.receipt_long, size: 18)),
             Tab(text: '参数', icon: Icon(Icons.tune, size: 18)),
             Tab(text: '盘点公式', icon: Icon(Icons.functions, size: 18)),
+            Tab(text: '标签', icon: Icon(Icons.label_outline, size: 18)),
           ],
         ),
       ),
@@ -81,6 +87,12 @@ class _CellDetailScreenState extends State<CellDetailScreen>
             cell: cell,
             locked: locked,
             ledgerFormula: context.read<AppState>().ledgerView(widget.ledgerId)?.ledger.formulas['default'],
+          ),
+          _TagsTab(
+            cell: cell,
+            locked: locked,
+            ledgerId: widget.ledgerId,
+            billId: widget.billId,
           ),
         ],
       ),
@@ -671,5 +683,179 @@ class _FormulaTab extends StatelessWidget {
     final state = context.read<AppState>();
     final ledgerId = context.findAncestorStateOfType<_CellDetailScreenState>()!.widget.ledgerId;
     await state.setCellFormula(ledgerId, cell.billId, cell.cellId, result);
+  }
+}
+
+// ─── 标签管理 Tab ────────────────────────────────────────────────────────────
+
+class _TagsTab extends StatelessWidget {
+  final Cell cell;
+  final bool locked;
+  final String ledgerId;
+  final String billId;
+
+  const _TagsTab({
+    required this.cell,
+    required this.locked,
+    required this.ledgerId,
+    required this.billId,
+  });
+
+  Future<void> _addTag(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('添加标签'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '标签名称',
+            hintText: '如：VIP、特殊、优惠...',
+          ),
+          onSubmitted: (v) { if (v.trim().isNotEmpty) Navigator.pop(ctx, v.trim()); },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              if (ctrl.text.trim().isNotEmpty) Navigator.pop(ctx, ctrl.text.trim());
+            },
+            child: const Text('添加'),
+          ),
+        ],
+      ),
+    );
+    if (tag == null) return;
+    if (cell.tags.contains(tag)) return;
+    final newTags = [...cell.tags, tag];
+    await context.read<AppState>().updateCell(
+      ledgerId, billId,
+      cell.copyWith(tags: newTags),
+    );
+  }
+
+  Future<void> _editTag(BuildContext context, String oldTag) async {
+    final ctrl = TextEditingController(text: oldTag);
+    final newTag = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修改标签'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '标签名称'),
+          onSubmitted: (v) { if (v.trim().isNotEmpty) Navigator.pop(ctx, v.trim()); },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              if (ctrl.text.trim().isNotEmpty) Navigator.pop(ctx, ctrl.text.trim());
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (newTag == null || newTag == oldTag) return;
+    final newTags = cell.tags.map((t) => t == oldTag ? newTag : t).toList();
+    await context.read<AppState>().updateCell(
+      ledgerId, billId,
+      cell.copyWith(tags: newTags),
+    );
+  }
+
+  Future<void> _deleteTag(BuildContext context, String tag) async {
+    final newTags = cell.tags.where((t) => t != tag).toList();
+    await context.read<AppState>().updateCell(
+      ledgerId, billId,
+      cell.copyWith(tags: newTags),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: [
+              const Text('标签列表', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const Spacer(),
+              if (!locked)
+                FilledButton.icon(
+                  onPressed: () => _addTag(context),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('添加标签'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (cell.tags.isEmpty)
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.label_off_outlined, size: 40, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text('暂无标签', style: TextStyle(color: Colors.grey)),
+                  SizedBox(height: 4),
+                  Text('标签可用于标签记账（按标签批量记账）', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.separated(
+              itemCount: cell.tags.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (ctx, i) {
+                final tag = cell.tags[i];
+                return ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(tag,
+                        style: const TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ),
+                  trailing: locked
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              tooltip: '修改',
+                              onPressed: () => _editTag(context, tag),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+                              tooltip: '删除',
+                              onPressed: () => _deleteTag(context, tag),
+                            ),
+                          ],
+                        ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
   }
 }

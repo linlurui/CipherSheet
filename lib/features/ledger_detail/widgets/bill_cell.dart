@@ -17,6 +17,7 @@ class BillCell extends StatelessWidget {
   final VoidCallback? onMarkSettled;
   final VoidCallback? onSetParams;
   final VoidCallback? onDelete;
+  final VoidCallback? onPredict;
 
   const BillCell({
     super.key,
@@ -30,6 +31,7 @@ class BillCell extends StatelessWidget {
     this.onMarkSettled,
     this.onSetParams,
     this.onDelete,
+    this.onPredict,
   });
 
   @override
@@ -48,7 +50,7 @@ class BillCell extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onDelete,
+      onLongPress: onLongPress,
       onSecondaryTap: onDelete,
       child: Container(
         decoration: BoxDecoration(
@@ -61,30 +63,32 @@ class BillCell extends StatelessWidget {
         ),
         padding: const EdgeInsets.all(8),
         child: ClipRect(
-          child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 序号 + 倍率
-            Row(
-              children: [
-                Text('#${cell.orderIndex.toString().padLeft(2, '0')}',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: textColor)),
-                if (cell.multiplier != 1.0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    margin: const EdgeInsets.only(left: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text('${cell.multiplier}x',
-                        style: TextStyle(fontSize: 10, color: textColor)),
+          child: Stack(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 序号 + 倍率
+                  Row(
+                    children: [
+                      Text('#${cell.orderIndex.toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: textColor)),
+                      if (cell.multiplier != 1.0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          margin: const EdgeInsets.only(left: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text('${cell.multiplier}x',
+                              style: TextStyle(fontSize: 10, color: textColor)),
+                        ),
+                    ],
                   ),
-              ],
-            ),
             const SizedBox(height: 4),
             // 金额（蓝色）
             Text(
@@ -114,19 +118,30 @@ class BillCell extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: _eventColor(cell.settlementEvent!).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Text(cell.settlementEvent!,
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _eventColor(cell.settlementEvent!))),
-                      ),
+                      Builder(builder: (context) {
+                        final amt = cell.settlementAmount ?? 0;
+                        final displayEvent = amt > 0
+                            ? SettlementEvent.surplus
+                            : amt < 0
+                                ? SettlementEvent.deficit
+                                : SettlementEvent.even;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: _eventColor(displayEvent).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(displayEvent,
+                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _eventColor(displayEvent))),
+                        );
+                      }),
                       const SizedBox(width: 3),
                       Flexible(
                         child: Text(
-                          '${cell.settlementAmount! >= 0 ? '+' : ''}${fmt.format(cell.settlementAmount!)}',
+                          // 金额为0时不显示正负号
+                          cell.settlementAmount == 0
+                              ? fmt.format(0)
+                              : '${cell.settlementAmount! > 0 ? '+' : ''}${fmt.format(cell.settlementAmount!)}',
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
                             color: cell.settlementAmount! >= 0 ? Colors.blue.shade700 : Colors.red.shade700),
                           overflow: TextOverflow.ellipsis,
@@ -135,15 +150,18 @@ class BillCell extends StatelessWidget {
                     ],
                   )
                 else
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: _eventColor(cell.settlementEvent!).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(cell.settlementEvent!,
-                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _eventColor(cell.settlementEvent!))),
-                  ),
+                  Builder(builder: (context) {
+                    final displayEvent = cell.settlementEvent ?? SettlementEvent.even;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: _eventColor(displayEvent).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(displayEvent,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _eventColor(displayEvent))),
+                    );
+                  }),
                 // 已结算金额（用户实际输入）
                 if (cell.settledAmount != null)
                   Text(
@@ -209,10 +227,41 @@ class BillCell extends StatelessWidget {
                           size: 18, color: Color(0xFF3563E9)),
                     ),
                   ),
+                // 预测图标
+                if (onPredict != null)
+                  GestureDetector(
+                    onTap: onPredict,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(Icons.insights,
+                          size: 18, color: Colors.orange),
+                    ),
+                  ),
               ],
             ),
           ],
         ),
+              // 标签水印（右上角，约露出八成）
+              if (cell.tags.isNotEmpty)
+                Positioned(
+                  top: -13,
+                  right: -6,
+                  child: Text(
+                    cell.tags.first,
+                    style: TextStyle(
+                      fontSize: 38,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black.withValues(alpha: 0.08),
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

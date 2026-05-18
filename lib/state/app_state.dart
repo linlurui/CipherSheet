@@ -839,6 +839,12 @@ class AppState extends ChangeNotifier {
     return s;
   }
 
+  /// 清除该账本的所有结算历史（一键清零用）
+  Future<void> clearLedgerSettlements(String ledgerId) async {
+    _store.settlements[ledgerId]?.clear();
+    await _persistAndChain('clear_settlements', {'ledger_id': ledgerId});
+  }
+
   // ============================================================
   // 持久化 + 上链
   // ============================================================
