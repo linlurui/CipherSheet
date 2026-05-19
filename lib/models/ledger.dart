@@ -3,7 +3,7 @@ import 'settlement.dart';
 import 'unit.dart';
 
 /// 账本级参数（参数名 + 金额/数值）
-/// 例如：{key: '赔率', value: 1.8, unit: '倍'}、{key: '利率', value: 5, unit: '%'}
+/// 例如：{key: '倍率', value: 1.8, unit: '倍'}、{key: '利率', value: 5, unit: '%'}
 class LedgerParameter {
   String key;
   double value;

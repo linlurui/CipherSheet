@@ -114,7 +114,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                '在此添加参数：参数名 + 数值。\n例如：市盈率 2，利率 4.75',
+                '在此添加参数：参数名 + 数值。\n例如：倍率 2，利率 4.75',
                 style: TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ),
@@ -257,7 +257,7 @@ class _FormulaSettingsDialogState extends State<FormulaSettingsDialog> {
             controller: ctrl,
             maxLines: 2,
             decoration: const InputDecoration(
-              hintText: '例如: amount * 赔率',
+              hintText: '例如: amount * 倍率',
               border: OutlineInputBorder(),
               isDense: true,
             ),
