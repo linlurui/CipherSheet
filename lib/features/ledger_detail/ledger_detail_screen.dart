@@ -2083,6 +2083,12 @@ class _BatchAddDialogState extends State<_BatchAddDialog> {
   final _amountCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _amountCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
     _amountCtrl.dispose();
     super.dispose();
@@ -2096,6 +2102,7 @@ class _BatchAddDialogState extends State<_BatchAddDialog> {
     final dialogHeight = MediaQuery.of(context).size.height * 0.6;
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: const Text('批量记账'),
       content: SizedBox(
         width: dialogWidth,
@@ -2116,16 +2123,24 @@ class _BatchAddDialogState extends State<_BatchAddDialog> {
             ),
             const SizedBox(height: 12),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('选择单元格 (${_selected.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => setState(() => _selected.addAll(cells.map((c) => c.cellId))),
-                  child: const Text('全选'),
-                ),
-                TextButton(
-                  onPressed: () => setState(() => _selected.clear()),
-                  child: const Text('清空'),
+                Text('选择单元格 (${_selected.length})',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                      onPressed: () => setState(() => _selected.addAll(cells.map((c) => c.cellId))),
+                      child: const Text('全选'),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                      onPressed: () => setState(() => _selected.clear()),
+                      child: const Text('清空'),
+                    ),
+                  ],
                 ),
               ],
             ),
