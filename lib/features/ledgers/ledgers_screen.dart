@@ -265,26 +265,14 @@ class _LedgersScreenState extends State<LedgersScreen>
   Future<void> _createLedger(BuildContext context) async {
     final nameCtrl = TextEditingController(
         text: '账本-${DateTime.now().millisecondsSinceEpoch % 10000}');
-    final rateCtrl = TextEditingController(text: '0');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('新建账本'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '名称')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: rateCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                  labelText: '初始利率 (%)', hintText: '例如 47'),
-            ),
-          ],
-        ),
+        content: TextField(
+            controller: nameCtrl,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '名称')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -296,12 +284,10 @@ class _LedgersScreenState extends State<LedgersScreen>
       ),
     );
     if (ok != true) return;
-    final rate = double.tryParse(rateCtrl.text.trim()) ?? 0;
     await context.read<AppState>().createLedger(
         name: nameCtrl.text.trim().isEmpty
             ? 'Untitled'
-            : nameCtrl.text.trim(),
-        interestRate: rate);
+            : nameCtrl.text.trim());
   }
 
   @override

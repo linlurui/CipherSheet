@@ -155,26 +155,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                             },
                           ),
                         ),
-                        // 单位（下拉选择）
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: SizedBox(
-                            width: 100,
-                            child: DropdownButtonFormField<String>(
-                              value: ParameterUnit.all.contains(p.unit) ? p.unit : '',
-                              isDense: true,
-                              decoration: const InputDecoration(
-                                labelText: '单位',
-                                isDense: true,
-                              ),
-                              items: ParameterUnit.all.map((u) => DropdownMenuItem(
-                                value: u,
-                                child: Text(ParameterUnit.getLabel(u), style: const TextStyle(fontSize: 12)),
-                              )).toList(),
-                              onChanged: (v) => setState(() => p.unit = v ?? ''),
-                            ),
-                          ),
-                        ),
+                        const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.delete_outline,
                               color: Colors.red),
@@ -247,6 +228,8 @@ class _FormulaSettingsDialogState extends State<FormulaSettingsDialog> {
     super.dispose();
   }
 
+  bool _hintExpanded = false;
+
   @override
   Widget build(BuildContext context) {
     final params = widget.ledger.parameters;
@@ -281,28 +264,46 @@ class _FormulaSettingsDialogState extends State<FormulaSettingsDialog> {
       title: const Text('盘点公式'),
       content: SizedBox(
         width: contentWidth,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 可折叠说明
+              GestureDetector(
+                onTap: () => setState(() => _hintExpanded = !_hintExpanded),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 14, color: Colors.blue.shade400),
+                    const SizedBox(width: 4),
+                    Text('查看说明', style: TextStyle(fontSize: 12, color: Colors.blue.shade600)),
+                    Icon(_hintExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 14, color: Colors.blue.shade400),
+                  ],
+                ),
               ),
-              child: Text(
-                '盘点时手动选择盈/平/亏，选盈用盘盈公式，选亏用盘亏公式，选平直接等于记账金额。\n$varHint',
-                style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.5),
-              ),
-            ),
-            const SizedBox(height: 16),
-            formulaField('盘盈公式（应收）', _surplusCtrl, Colors.green.shade700),
-            const SizedBox(height: 12),
-            formulaField('盘亏公式（应付）', _deficitCtrl, Colors.red.shade700),
-            const SizedBox(height: 6),
-            const Text('支持: + - * / 和括号', style: TextStyle(fontSize: 11, color: Colors.black45)),
-          ],
+              if (_hintExpanded) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '盘点时手动选择盈/平/亏，选盈用盘盈公式，选亏用盘亏公式，选平直接等于记账金额。\n$varHint',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.5),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              formulaField('盘盈公式（应收）', _surplusCtrl, Colors.green.shade700),
+              const SizedBox(height: 12),
+              formulaField('盘亏公式（应付）', _deficitCtrl, Colors.red.shade700),
+              const SizedBox(height: 6),
+              const Text('支持: + - * / 和括号', style: TextStyle(fontSize: 11, color: Colors.black45)),
+            ],
+          ),
         ),
       ),
       actions: [
