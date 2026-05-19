@@ -68,8 +68,9 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
 
-    // 锁屏优先：不构建任何业务内容
-    if (state.screenLocked && state.screenLock.isEnabled) {
+    // 锁屏只在 ready 状态生效，激活页/启动页不受锁屏控制
+    if (state.stage == AppStage.ready &&
+        state.screenLocked && state.screenLock.isEnabled) {
       return _LockScreen(service: state.screenLock, onUnlocked: state.unlockScreen);
     }
 
@@ -125,8 +126,8 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         break;
     }
 
-    // 进入后台时用灰色遮挡，防止多任务截图泄露
-    if (_obscured) {
+    // 进入后台时用灰色遮挡，仅 ready 状态需要保护内容
+    if (_obscured && state.stage == AppStage.ready) {
       return const Scaffold(backgroundColor: Color(0xFF2C2C2C));
     }
 
