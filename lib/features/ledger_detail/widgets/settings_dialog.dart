@@ -88,6 +88,11 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
     setState(() => _items.removeAt(i));
   }
 
+  void _save() {
+    final cleaned = _items.where((p) => p.key.trim().isNotEmpty).toList();
+    Navigator.pop(context, cleaned);
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -156,6 +161,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                               onChanged: (v) {
                                 p.value = double.tryParse(v.trim()) ?? 0;
                               },
+                              onFieldSubmitted: (_) => _save(),
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -187,13 +193,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
             onPressed: () => Navigator.pop(context),
             child: const Text('取消')),
         FilledButton(
-          onPressed: () {
-            // 过滤无效项
-            final cleaned = _items
-                .where((p) => p.key.trim().isNotEmpty)
-                .toList();
-            Navigator.pop(context, cleaned);
-          },
+          onPressed: _save,
           child: const Text('保存'),
         ),
       ],

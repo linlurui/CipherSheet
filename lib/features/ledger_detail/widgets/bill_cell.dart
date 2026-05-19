@@ -67,6 +67,7 @@ class BillCell extends StatelessWidget {
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // 序号 + 倍率
                   Row(
@@ -98,10 +99,10 @@ class BillCell extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF3563E9)),
             ),
-            // 参数列表（最多显示 2 条）
+            // 参数列表（全部显示）
             if (cell.parameters.isNotEmpty && !locked) ...[
               const SizedBox(height: 2),
-              ...cell.parameters.take(2).map((p) => Text(
+              ...cell.parameters.map((p) => Text(
                 '${p.key}: ${p.value}${p.unit}',
                 style: TextStyle(
                     fontSize: 9, color: textColor.withValues(alpha: 0.65)),
@@ -109,7 +110,7 @@ class BillCell extends StatelessWidget {
                 maxLines: 1,
               )),
             ],
-            const Spacer(),
+            const SizedBox(height: 4),
             // 未盘点时显示盈亏估算；已盘点时显示事件标签+结算金额并排
             if (!locked) ...[
               if (isSettled) ...[

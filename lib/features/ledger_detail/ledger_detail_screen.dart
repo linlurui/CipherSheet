@@ -27,11 +27,13 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
   bool _ensuringDefaultBill = false;
   String _cellFilter = '';
   final _searchCtrl = TextEditingController();
+  final _gridScrollCtrl = ScrollController();
   _PredictionData? _prediction;
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _gridScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -439,9 +441,22 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
       final newBill = _defaultBill();
       if (newBill == null) return;
       await state.addCell(widget.ledgerId, newBill.billId);
-      return;
+    } else {
+      await state.addCell(widget.ledgerId, bill.billId);
     }
-    await state.addCell(widget.ledgerId, bill.billId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('新增单元格成功'), duration: Duration(seconds: 1)),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_gridScrollCtrl.hasClients) {
+        _gridScrollCtrl.animateTo(
+          _gridScrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   Future<void> _batchAddCells() async {
@@ -459,6 +474,19 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
       if (bill == null) return;
     }
     await state.batchAddCells(widget.ledgerId, bill.billId, n);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('成功新增 $n 个单元格'), duration: const Duration(seconds: 1)),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_gridScrollCtrl.hasClients) {
+        _gridScrollCtrl.animateTo(
+          _gridScrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   Future<void> _renameLedger(LedgerView view) async {
@@ -709,36 +737,38 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     }
   }
 
-  /// 计算盘点预测（汇总视角）：
-  ///   盘盈预测 = 所有格子原始金额之和（全部盘盈时的总收入）
-  ///   盘亏预测 = -(触发格盘亏公式结果)，即需赔付的金额（负值）
-  ///   盈亏预测 = 盘盈预测 + 盘亏预测（盘盈 - 赔付）
+  /// 计算盘点预测：
+  ///   盘盈预测 = 所有格子盘盈之和（含触发格，已记账=已收钱）
+  ///   盘亏预测 = 触发格盘亏结果（负值，需赔付）
+  ///   盈亏预测 = 盘盈预测 + 盘亏预测
   _PredictionData? _calculatePrediction(Cell triggerCell, LedgerView view) {
     final formulas = view.ledger.formulas;
+    final surplusF = formulas[SettlementEvent.surplus] ?? '';
+    final deficitF = formulas[SettlementEvent.deficit] ?? '';
 
-    // 盘盈预测 = 所有格子原始金额之和
-    double grandTotal = 0;
+    // 所有格子盘盈之和（含触发格，因为已记账说明已收钱）
+    double surplusTotal = 0;
     for (final bill in view.bills) {
       for (final cell in bill.cells) {
-        grandTotal += cell.totalAmount;
+        final s = surplusF.isEmpty
+            ? cell.totalAmount * cell.multiplier
+            : cell.calculatedAmount(ledgerFormula: surplusF);
+        surplusTotal += s;
       }
     }
 
-    // 触发格盘亏公式结果（赔付额，正值）
-    final deficitF = formulas[SettlementEvent.deficit] ?? '';
+    // 触发格盘亏结果（赔付额，取负值）
     final deficitPayout = deficitF.isEmpty
         ? triggerCell.totalAmount * triggerCell.multiplier
         : triggerCell.calculatedAmount(ledgerFormula: deficitF).abs();
-
-    // 盘亏预测 = 负的赔付额
     final deficitCalc = -deficitPayout;
 
-    // 盈亏预测 = 总收入 - 赔付额
-    final profit = grandTotal - deficitPayout;
+    // 盈亏预测 = 其余盘盈 + 触发格盘亏
+    final profit = surplusTotal + deficitCalc;
 
     return _PredictionData(
       cellTitle: triggerCell.title,
-      surplusAmount: grandTotal,
+      surplusAmount: surplusTotal,
       deficitAmount: deficitCalc,
       totalAmount: triggerCell.totalAmount,
       profit: profit,
@@ -849,12 +879,18 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                   child: TextField(
                     controller: amountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+                    textInputAction: TextInputAction.done,
                     inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]'))],
                     decoration: const InputDecoration(
                       labelText: '金额',
                       hintText: '如: 100',
                       isDense: true,
                     ),
+                    onSubmitted: (_) {
+                      final index = int.tryParse(indexCtrl.text);
+                      final amount = double.tryParse(amountCtrl.text);
+                      if (index != null && amount != null) Navigator.pop(ctx, true);
+                    },
                   ),
                 ),
               ],
@@ -1245,6 +1281,7 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                     bill: bill,
                     filter: _cellFilter,
                     locked: locked,
+                    scrollController: _gridScrollCtrl,
                     interestRate: view.ledger.interestRate,
                     rules: view.ledger.rules,
                     onTap: (cell) => _onTapCell(cell, bill),
@@ -1303,6 +1340,7 @@ class _SummaryCardState extends State<_SummaryCard> {
     int surplusCount = 0, deficitCount = 0, evenCount = 0, unsettledCount = 0;
     double totalAmount = 0;
     double totalCalculated = 0;
+    double settledInputTotal = 0; // 已盘点格子的原始金额，用于计算盈亏
 
     for (final cell in cells) {
       final cellTotal = cell.totalAmount;
@@ -1311,6 +1349,7 @@ class _SummaryCardState extends State<_SummaryCard> {
       // 获取计算金额（已盘点用结算金额，未盘点不计入合计）
       if (cell.settlementEvent != null && cell.settlementAmount != null) {
         totalCalculated += cell.settlementAmount!;
+        settledInputTotal += cellTotal;
       }
 
       // 统计盘点状态
@@ -1325,7 +1364,8 @@ class _SummaryCardState extends State<_SummaryCard> {
       }
     }
 
-    final profit = totalCalculated - totalAmount;
+    // 盈亏只统计已盘点格子（未盘点时为 0，避免误导）
+    final profit = totalCalculated - settledInputTotal;
 
     return _SummaryData(
       totalAmount: totalAmount,
@@ -1697,6 +1737,7 @@ class _CellGrid extends StatelessWidget {
   final bool locked;
   final double interestRate;
   final LedgerRules rules;
+  final ScrollController? scrollController;
   final void Function(Cell) onTap;
   final void Function(Cell) onLongPress;
   final void Function(Cell) onShowRecords;
@@ -1711,6 +1752,7 @@ class _CellGrid extends StatelessWidget {
     required this.locked,
     required this.interestRate,
     required this.rules,
+    this.scrollController,
     required this.onTap,
     required this.onLongPress,
     required this.onShowRecords,
@@ -1761,13 +1803,17 @@ class _CellGrid extends StatelessWidget {
     } else {
       crossAxisCount = 3;
     }
+    // 根据格子中最多参数数量动态计算行高：基础高度 + 每个参数约 14px
+    final maxParams = cells.fold<int>(0, (m, c) => c.parameters.length > m ? c.parameters.length : m);
+    final mainAxisExtent = 130.0 + maxParams * 14.0;
     return GridView.builder(
+      controller: scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         mainAxisSpacing: 8,
         crossAxisSpacing: 8,
-        mainAxisExtent: 140,
+        mainAxisExtent: mainAxisExtent,
       ),
       itemCount: cells.length,
       itemBuilder: (ctx, i) {

@@ -109,40 +109,10 @@ class _CellDetailScreenState extends State<CellDetailScreen>
   Future<void> _addRecord(Cell cell) async {
     final amount = await showDialog<double>(
       context: context,
-      builder: (ctx) {
-        final ctrl = TextEditingController();
-        final remarkCtrl = TextEditingController();
-        return AlertDialog(
-          title: const Text('新增记账'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: ctrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                decoration: const InputDecoration(labelText: '金额'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: remarkCtrl,
-                decoration: const InputDecoration(labelText: '备注'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-            FilledButton(
-              onPressed: () {
-                final v = double.tryParse(ctrl.text);
-                if (v != null && v != 0) Navigator.pop(ctx, v);
-              },
-              child: const Text('确定'),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => _AddRecordDialog(
+        onConfirm: (d) => Navigator.pop(ctx, d),
+        onCancel: () => Navigator.pop(ctx),
+      ),
     );
     if (amount == null) return;
     // We need the remark too — simplified: re-ask or use empty
@@ -331,6 +301,12 @@ class _ParamsTab extends StatelessWidget {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                         decoration: const InputDecoration(labelText: '数值', isDense: true),
+                        onSubmitted: (_) {
+                          final v = double.tryParse(valCtrl.text);
+                          if (v != null && keyCtrl.text.isNotEmpty) {
+                            Navigator.pop(ctx, {'key': keyCtrl.text, 'value': v, 'unit': selectedUnit});
+                          }
+                        },
                       ),
                     ),
                   ],
@@ -396,6 +372,10 @@ class _ParamsTab extends StatelessWidget {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                   decoration: const InputDecoration(labelText: '数值', isDense: true),
+                  onSubmitted: (_) {
+                    final v = double.tryParse(valCtrl.text);
+                    if (v != null) Navigator.pop(ctx, {'value': v, 'unit': selectedUnit});
+                  },
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
@@ -859,6 +839,139 @@ class _TagsTab extends StatelessWidget {
               },
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// 数字输入格式化器：仅允许数字和小数点，同时拦截 IME 提交时夹带的换行符
+/// 中文输入法在 macOS 上按 Enter 会通过文字通道发送 \n，此处捕获并触发确认
+class _NumericEnterFormatter extends TextInputFormatter {
+  const _NumericEnterFormatter({required this.onEnter});
+  final VoidCallback onEnter;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.contains('\n')) {
+      Future.microtask(onEnter);
+      final filtered = newValue.text.replaceAll('\n', '').replaceAll(RegExp(r'[^0-9.]'), '');
+      return TextEditingValue(
+        text: filtered,
+        selection: TextSelection.collapsed(offset: filtered.length),
+        composing: TextRange.empty,
+      );
+    }
+    final filtered = newValue.text.replaceAll(RegExp(r'[^0-9.]'), '');
+    if (filtered == newValue.text) return newValue;
+    return newValue.copyWith(
+      text: filtered,
+      selection: TextSelection.collapsed(offset: filtered.length.clamp(0, filtered.length)),
+    );
+  }
+}
+
+/// 新增记账弹框，使用 HardwareKeyboard 捕获 Enter 键（跨平台可靠）
+class _AddRecordDialog extends StatefulWidget {
+  const _AddRecordDialog({required this.onConfirm, required this.onCancel});
+  final void Function(double) onConfirm;
+  final VoidCallback onCancel;
+
+  @override
+  State<_AddRecordDialog> createState() => _AddRecordDialogState();
+}
+
+class _AddRecordDialogState extends State<_AddRecordDialog> {
+  final _amountCtrl = TextEditingController();
+  final _remarkCtrl = TextEditingController();
+  final _amountFocus = FocusNode();
+  final _remarkFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // 备用方案：焦点离开金额框时（Enter 导致）自动确认
+    _amountFocus.addListener(_onAmountFocusChanged);
+    // 桌面端非 IME 场景
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    _amountFocus.removeListener(_onAmountFocusChanged);
+    _amountFocus.dispose();
+    _remarkFocus.dispose();
+    _amountCtrl.dispose();
+    _remarkCtrl.dispose();
+    super.dispose();
+  }
+
+  // 方案1：焦点离开金额框 → 确认（处理 IME Enter 导致焦点移走的情况）
+  void _onAmountFocusChanged() {
+    if (_amountFocus.hasFocus) return;
+    // 延迟一帧，让焦点稳定后判断
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // 若焦点没有转移到备注框，说明是 Enter 触发的离焦，执行确认
+      if (!_remarkFocus.hasFocus) {
+        final text = _amountCtrl.text.trim();
+        if (text.isNotEmpty) _doConfirm(text);
+      }
+    });
+  }
+
+  // 方案2：非 IME 桌面用户（HardwareKeyboard 能收到 Enter）
+  bool _onKey(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        (event.logicalKey == LogicalKeyboardKey.enter ||
+         event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+      final text = _amountCtrl.text.trim();
+      if (text.isNotEmpty) _doConfirm(text);
+    }
+    return false;
+  }
+
+  void _doConfirm(String text) {
+    if (!mounted) return;
+    final d = double.tryParse(text);
+    if (d != null && d != 0) widget.onConfirm(d);
+  }
+
+  void _confirm() => _doConfirm(_amountCtrl.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新增记账'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _amountCtrl,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.done,
+            // 方案3：IME 提交时文字通道会夹带 \n，Formatter 在此拦截
+            inputFormatters: [_NumericEnterFormatter(onEnter: _confirm)],
+            decoration: const InputDecoration(labelText: '金额'),
+            focusNode: _amountFocus,
+            onSubmitted: (v) => _doConfirm(v.trim()),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _remarkCtrl,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(labelText: '备注（可选）'),
+            onSubmitted: (_) => _confirm(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: widget.onCancel, child: const Text('取消')),
+        FilledButton(onPressed: _confirm, child: const Text('确定')),
       ],
     );
   }

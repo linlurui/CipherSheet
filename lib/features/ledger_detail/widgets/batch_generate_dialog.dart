@@ -25,9 +25,14 @@ class _BatchGenerateDialogState extends State<BatchGenerateDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _ctrl,
+              autofocus: true,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(labelText: '生成数量'),
+              onSubmitted: (_) {
+                final n = int.tryParse(_ctrl.text.trim()) ?? 0;
+                if (n > 0 && n <= 999) Navigator.pop(context, n);
+              },
             ),
           ],
         ),

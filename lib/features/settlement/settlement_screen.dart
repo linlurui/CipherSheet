@@ -99,6 +99,9 @@ class _SettlementScreenState extends State<SettlementScreen>
                             hintText: locked ? '请先解锁账本' : '请输入实际结算金额',
                             prefixIcon: const Icon(Icons.payments_outlined),
                           ),
+                          onSubmitted: (_) {
+                            if (!_busy && !locked) _doSettle(context, view);
+                          },
                         ),
                         const SizedBox(height: 12),
                         Align(

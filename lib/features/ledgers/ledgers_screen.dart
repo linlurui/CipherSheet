@@ -227,6 +227,7 @@ class _LedgersScreenState extends State<LedgersScreen>
             children: [
               TextField(
                 controller: nameCtrl,
+                autofocus: true,
                 decoration: const InputDecoration(labelText: '新账本名称'),
               ),
               const SizedBox(height: 16),
@@ -272,7 +273,8 @@ class _LedgersScreenState extends State<LedgersScreen>
         content: TextField(
             controller: nameCtrl,
             autofocus: true,
-            decoration: const InputDecoration(labelText: '名称')),
+            decoration: const InputDecoration(labelText: '名称'),
+            onSubmitted: (_) => Navigator.pop(ctx, true)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
