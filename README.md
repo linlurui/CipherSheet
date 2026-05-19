@@ -53,7 +53,7 @@ Flutter UI (Material 3)
 lib/
   main.dart                                 # 入口
   app.dart                                  # MaterialApp + 引导
-  theme.dart                                # 主题 + 倍率配色
+  theme.dart                                # 主题 + 配色
   core/
     crypto/passphrase_crypto.dart           # 助记词派生 + AES-GCM
     license/license_service.dart            # DL SDK 封装 + 多路径 dylib 搜索

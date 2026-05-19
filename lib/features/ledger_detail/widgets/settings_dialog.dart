@@ -5,12 +5,6 @@ import '../../../models/ledger.dart';
 import '../../../models/cell.dart';
 import '../../../models/unit.dart';
 
-class LedgerSettingsResult {
-  final double interestRate;
-  final double? warningLimit;
-  final double warningLimitPercent;
-  LedgerSettingsResult(this.interestRate, this.warningLimit, this.warningLimitPercent);
-}
 
 /// 设置入口对话框：账本级别参数设置 + 盘点公式
 class LedgerSettingsMenuDialog extends StatelessWidget {
@@ -34,7 +28,7 @@ class LedgerSettingsMenuDialog extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.tune),
           title: const Text('参数设置'),
-          subtitle: const Text('增减参数（参数名 + 数值 + 单位），可在盘点公式中引用'),
+          subtitle: const Text('增减参数（参数名 + 数值），可在盘点公式中引用'),
           onTap: () {
             Navigator.pop(context);
             onOpenParameters();
@@ -323,121 +317,6 @@ class _FormulaSettingsDialogState extends State<FormulaSettingsDialog> {
               SettlementEvent.surplus: _surplusCtrl.text.trim(),
               SettlementEvent.deficit: _deficitCtrl.text.trim(),
             });
-          },
-          child: const Text('保存'),
-        ),
-      ],
-    );
-  }
-}
-
-class LedgerSettingsDialog extends StatefulWidget {
-  final Ledger ledger;
-  const LedgerSettingsDialog({super.key, required this.ledger});
-
-  @override
-  State<LedgerSettingsDialog> createState() => _LedgerSettingsDialogState();
-}
-
-class _LedgerSettingsDialogState extends State<LedgerSettingsDialog> {
-  late TextEditingController _rate;
-  late TextEditingController _limitPercent;
-  late TextEditingController _limitOverride;
-  bool _autoLimit = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _rate = TextEditingController(text: widget.ledger.interestRate.toString());
-    _limitPercent = TextEditingController(text: widget.ledger.warningLimitPercent.toString());
-    _limitOverride = TextEditingController(
-        text: widget.ledger.warningLimitOverride?.toString() ?? '');
-    _autoLimit = widget.ledger.warningLimitOverride == null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final contentWidth = screenWidth > 500 ? 360.0 : screenWidth * 0.85;
-
-    return AlertDialog(
-      title: Text('账本设置 · ${widget.ledger.name}'),
-      content: SizedBox(
-        width: contentWidth,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _rate,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(
-                labelText: '利率 (%)',
-                helperText: '动态可调，参与结算计算 (expected = total * (1+rate/100))',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _limitPercent,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(
-                labelText: '预警限额比例 (%)',
-                helperText: '自动计算: 总额 × 此比例，如 2 表示 2%',
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Checkbox(
-                  value: _autoLimit,
-                  onChanged: (v) =>
-                      setState(() => _autoLimit = v ?? false),
-                ),
-                const Expanded(child: Text('使用自动计算（忽略手动限额）')),
-              ],
-            ),
-            if (!_autoLimit)
-              TextField(
-                controller: _limitOverride,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                decoration:
-                    const InputDecoration(labelText: '手动预警限额'),
-              ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                '调整后立刻生效，并写入下一条 state_payload (DL 状态链将记录此次变更)。',
-                style: TextStyle(fontSize: 12, color: Colors.black87),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消')),
-        FilledButton(
-          onPressed: () {
-            final r = double.tryParse(_rate.text.trim()) ??
-                widget.ledger.interestRate;
-            final pct = double.tryParse(_limitPercent.text.trim()) ??
-                widget.ledger.warningLimitPercent;
-            double? lim;
-            if (!_autoLimit) {
-              lim = double.tryParse(_limitOverride.text.trim());
-            }
-            Navigator.pop(context, LedgerSettingsResult(r, lim, pct));
           },
           child: const Text('保存'),
         ),
