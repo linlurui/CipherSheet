@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../models/ledger.dart';
 import '../../../models/cell.dart';
@@ -113,7 +114,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                '在此添加参数：参数名 + 数值。\n例如：赔率 2，利率 4.75',
+                '在此添加参数：参数名 + 数值。\n例如：市盈率 2，利率 4.75',
                 style: TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ),
@@ -132,26 +133,31 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                         children: [
                           // 参数名
                           SizedBox(
-                            width: 150,
+                            width: 96,
                             child: TextFormField(
                               initialValue: p.key,
                               decoration: const InputDecoration(
-                                labelText: '参数名',
+                                hintText: '参数名',
                                 isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                border: OutlineInputBorder(),
                               ),
                               onChanged: (v) => p.key = v.trim(),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           // 数值
                           SizedBox(
-                            width: 130,
+                            width: 90,
                             child: TextFormField(
                               initialValue: p.value.toString(),
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                               decoration: const InputDecoration(
-                                labelText: '数值',
+                                hintText: '数值',
                                 isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                border: OutlineInputBorder(),
                               ),
                               onChanged: (v) {
                                 p.value = double.tryParse(v.trim()) ?? 0;
@@ -365,6 +371,7 @@ class _LedgerSettingsDialogState extends State<LedgerSettingsDialog> {
               controller: _rate,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
               decoration: const InputDecoration(
                 labelText: '利率 (%)',
                 helperText: '动态可调，参与结算计算 (expected = total * (1+rate/100))',
@@ -375,6 +382,7 @@ class _LedgerSettingsDialogState extends State<LedgerSettingsDialog> {
               controller: _limitPercent,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
               decoration: const InputDecoration(
                 labelText: '预警限额比例 (%)',
                 helperText: '自动计算: 总额 × 此比例，如 2 表示 2%',
@@ -396,6 +404,7 @@ class _LedgerSettingsDialogState extends State<LedgerSettingsDialog> {
                 controller: _limitOverride,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                 decoration:
                     const InputDecoration(labelText: '手动预警限额'),
               ),

@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -93,6 +94,7 @@ class _SettlementScreenState extends State<SettlementScreen>
                           enabled: !locked,
                           keyboardType:
                               const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                           decoration: InputDecoration(
                             hintText: locked ? '请先解锁账本' : '请输入实际结算金额',
                             prefixIcon: const Icon(Icons.payments_outlined),

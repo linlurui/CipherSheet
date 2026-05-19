@@ -835,6 +835,7 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                   child: TextField(
                     controller: indexCtrl,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: const InputDecoration(
                       labelText: '序号',
                       hintText: '如: 01',
@@ -848,6 +849,7 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                   child: TextField(
                     controller: amountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]'))],
                     decoration: const InputDecoration(
                       labelText: '金额',
                       hintText: '如: 100',
@@ -2028,6 +2030,7 @@ class _TagAddDialogState extends State<_TagAddDialog> {
               controller: _amountCtrl,
               autofocus: widget.allTags.length == 1,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
               decoration: InputDecoration(
                 labelText: '金额',
                 hintText: '输入金额',
@@ -2104,6 +2107,7 @@ class _BatchAddDialogState extends State<_BatchAddDialog> {
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]'))],
               decoration: const InputDecoration(
                 labelText: '统一金额',
                 hintText: '输入要记到所有选中单元格的金额',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -119,6 +120,7 @@ class _CellDetailScreenState extends State<CellDetailScreen>
               TextField(
                 controller: ctrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                 decoration: const InputDecoration(labelText: '金额'),
               ),
               const SizedBox(height: 8),
@@ -327,6 +329,7 @@ class _ParamsTab extends StatelessWidget {
                       child: TextField(
                         controller: valCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                         decoration: const InputDecoration(labelText: '数值', isDense: true),
                       ),
                     ),
@@ -391,6 +394,7 @@ class _ParamsTab extends StatelessWidget {
                 TextField(
                   controller: valCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                   decoration: const InputDecoration(labelText: '数值', isDense: true),
                 ),
                 const SizedBox(height: 8),

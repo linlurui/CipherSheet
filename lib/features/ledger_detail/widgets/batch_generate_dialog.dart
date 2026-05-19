@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class BatchGenerateDialog extends StatefulWidget {
   const BatchGenerateDialog({super.key});
@@ -25,6 +26,7 @@ class _BatchGenerateDialogState extends State<BatchGenerateDialog> {
             TextField(
               controller: _ctrl,
               keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(labelText: '生成数量'),
             ),
           ],

@@ -103,7 +103,6 @@ class Ledger {
   List<LedgerParameter> parameters;
 
   /// 各盘点事件对应公式：event -> expression
-  /// 例如：{'盘盈': 'total * 赔率', '盘亏': 'total * -1', '盘平': 'total'}
   Map<String, String> formulas;
 
   /// 账本规则（开关集合）
