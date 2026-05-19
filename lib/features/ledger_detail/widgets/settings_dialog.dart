@@ -96,9 +96,10 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final contentWidth = screenWidth > 600 ? 480.0 : screenWidth * 0.85;
+    final contentWidth = screenWidth > 600 ? 540.0 : screenWidth * 0.92;
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: const Text('参数设置'),
       content: SizedBox(
         width: contentWidth,
@@ -112,7 +113,7 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                '在此添加参数：参数名 + 数值 + 单位。\n例如：赔率 0.95 倍，利率 4.75 %',
+                '在此添加参数：参数名 + 数值。\n例如：赔率 2，利率 4.75',
                 style: TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ),
@@ -125,43 +126,45 @@ class _ParameterSettingsDialogState extends State<ParameterSettingsDialog> {
                   final p = _items[i];
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        // 参数名
-                        Expanded(
-                          flex: 3,
-                          child: TextFormField(
-                            initialValue: p.key,
-                            decoration: const InputDecoration(
-                              labelText: '参数名',
-                              isDense: true,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          // 参数名
+                          SizedBox(
+                            width: 150,
+                            child: TextFormField(
+                              initialValue: p.key,
+                              decoration: const InputDecoration(
+                                labelText: '参数名',
+                                isDense: true,
+                              ),
+                              onChanged: (v) => p.key = v.trim(),
                             ),
-                            onChanged: (v) => p.key = v.trim(),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        // 数值（只允许数字）
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            initialValue: p.value.toString(),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(
-                              labelText: '数值',
-                              isDense: true,
+                          const SizedBox(width: 12),
+                          // 数值
+                          SizedBox(
+                            width: 130,
+                            child: TextFormField(
+                              initialValue: p.value.toString(),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(
+                                labelText: '数值',
+                                isDense: true,
+                              ),
+                              onChanged: (v) {
+                                p.value = double.tryParse(v.trim()) ?? 0;
+                              },
                             ),
-                            onChanged: (v) {
-                              p.value = double.tryParse(v.trim()) ?? 0;
-                            },
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.red),
-                          onPressed: () => _remove(i),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            onPressed: () => _remove(i),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
