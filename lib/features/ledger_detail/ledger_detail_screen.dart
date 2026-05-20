@@ -629,6 +629,108 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     }
   }
 
+  /// 撤销记账：自动定位最近一条记账记录，一步确认即撤销
+  Future<void> _undoLastRecord(LedgerView view) async {
+    // 收集所有格子的记录
+    final entries = <_RecordEntry>[];
+    for (final bill in view.bills) {
+      for (final cell in bill.cells) {
+        for (final record in cell.records) {
+          entries.add(_RecordEntry(bill: bill, cell: cell, record: record));
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    if (entries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前账本暂无记账记录')),
+      );
+      return;
+    }
+
+    // 找出创建时间最新的那条
+    entries.sort((a, b) => b.record.createdAt.compareTo(a.record.createdAt));
+    final latest = entries.first;
+    final fmt = NumberFormat('#,##0.##');
+    final dateFmt = DateFormat('MM-dd HH:mm:ss');
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('撤销最近一笔记账'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('将撤销以下记账记录：',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFF3563E9).withValues(alpha: 0.12),
+                    child: Text(latest.cell.title,
+                        style: const TextStyle(fontSize: 10, color: Color(0xFF3563E9))),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(fmt.format(latest.record.amount),
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w700)),
+                        Text(
+                          latest.record.remarks.isEmpty
+                              ? dateFmt.format(latest.record.createdAt)
+                              : '${latest.record.remarks}  ·  ${dateFmt.format(latest.record.createdAt)}',
+                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确认撤销'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    await context.read<AppState>().deleteCellRecord(
+      widget.ledgerId,
+      latest.bill.billId,
+      latest.cell.cellId,
+      latest.record.recordId,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已撤销格子「${latest.cell.title}」的记账记录')),
+      );
+    }
+  }
+
   /// 一键清零：清除该账本的所有记账记录、盘点记录、结算记录
   Future<void> _clearAllData(LedgerView view) async {
     final ok = await showDialog<bool>(
@@ -1246,6 +1348,9 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                 case 'clear_all':
                   _clearAllData(view);
                   break;
+                case 'undo_record':
+                  _undoLastRecord(view);
+                  break;
               }
             },
             itemBuilder: (_) => [
@@ -1256,6 +1361,17 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'export', child: Text('导出数据')),
               const PopupMenuItem(value: 'import', child: Text('导入数据')),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'undo_record',
+                child: Row(
+                  children: [
+                    Icon(Icons.undo, size: 18, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('撤销记账'),
+                  ],
+                ),
+              ),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'clear_all',
@@ -2643,4 +2759,12 @@ class _BatchSettleDialogState extends State<_BatchSettleDialog> {
       ],
     );
   }
+}
+
+/// 撤销记账用的辅助数据类：保存 bill、cell、record 的引用
+class _RecordEntry {
+  final Bill bill;
+  final Cell cell;
+  final CellRecord record;
+  const _RecordEntry({required this.bill, required this.cell, required this.record});
 }
