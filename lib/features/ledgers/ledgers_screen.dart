@@ -1,4 +1,9 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/security/screen_lock_service.dart';
@@ -97,6 +102,68 @@ class _LedgersScreenState extends State<LedgersScreen>
       case 'license':
         await _openLicenseInfo(state);
         break;
+      case 'restore_local':
+        await _restoreLocalBackup(state);
+        break;
+    }
+  }
+
+  /// 扫描本地备份文件
+  Future<File?> _scanLocalBackup() async {
+    try {
+      final root = await getApplicationSupportDirectory();
+      final f = File(p.join(root.path, 'ciphersheet', 'token_latest.txt'));
+      if (await f.exists()) return f;
+    } catch (_) {}
+    return null;
+  }
+
+  /// 恢复本地备份
+  Future<void> _restoreLocalBackup(AppState state) async {
+    final backup = await _scanLocalBackup();
+    if (backup == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未发现本地备份')),
+      );
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('恢复本地备份'),
+        content: const Text('此操作将使用本地备份的授权 Token 重新激活。\n\n当前账本数据不会丢失。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('恢复'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    try {
+      final content = await backup.readAsString();
+      final err = await state.activateWithToken(content.trim());
+      if (!mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('恢复失败: $err')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已从本地备份恢复授权')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('读取备份失败: $e')),
+      );
     }
   }
 
@@ -349,6 +416,16 @@ class _LedgersScreenState extends State<LedgersScreen>
                 child: const ListTile(
                   leading: Icon(Icons.shield_outlined, color: Colors.green, size: 20),
                   title: Text('激活信息'),
+                  dense: true,
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'restore_local',
+                child: ListTile(
+                  leading: Icon(Icons.restore_from_trash, color: Colors.orange.shade700, size: 20),
+                  title: const Text('恢复本地备份'),
+                  subtitle: const Text('从本地 token_latest.txt 恢复授权', style: TextStyle(fontSize: 11)),
                   dense: true,
                 ),
               ),

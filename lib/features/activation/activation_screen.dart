@@ -21,33 +21,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
   final _tokenCtrl = TextEditingController();
   bool _busy = false;
   String? _error;
-  File? _latestBackup;
-  bool _scanned = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scanBackups();
-  }
-
-  Future<void> _scanBackups() async {
-    try {
-      final root = await getApplicationSupportDirectory();
-      final f = File(p.join(root.path, 'ciphersheet', 'token_latest.txt'));
-      if (await f.exists()) {
-        if (mounted) {
-          setState(() {
-            _latestBackup = f;
-            _scanned = true;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _scanned = true);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _scanned = true);
-    }
-  }
 
   Future<void> _activate() async {
     final state = context.read<AppState>();
@@ -66,29 +39,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _busy = false;
       _error = err;
     });
-  }
-
-  Future<void> _restoreFromBackup(File file) async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final content = await file.readAsString();
-      final state = context.read<AppState>();
-      final err = await state.activateWithToken(content.trim());
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = err;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = '读取备份失败: $e';
-      });
-    }
   }
 
   /// 选文件（桌面/Web）/选图片（移动端）→ 读取文本内容到 Token 输入框
@@ -160,55 +110,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
                 const Text('离线加密账本',
                     style: TextStyle(color: Colors.black54)),
                 const SizedBox(height: 28),
-
-                // 本地备份恢复区
-                if (_latestBackup != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.cloud_done_outlined,
-                                size: 18, color: Colors.green.shade700),
-                            const SizedBox(width: 6),
-                            Text('发现本地备份',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green.shade700)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _busy ? null : () => _restoreFromBackup(_latestBackup!),
-                            icon: const Icon(Icons.restore, size: 16),
-                            label: const Text('恢复最新备份'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  const SizedBox(height: 16),
-                  Text('或手动粘贴 Token',
-                      style: TextStyle(color: Colors.black45, fontSize: 13)),
-                  const SizedBox(height: 12),
-                ],
-
-                if (_latestBackup == null && _scanned) ...[
-                  Text('请粘贴授权 Token 字符串以激活',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                ],
 
                 TextField(
                   controller: _tokenCtrl,
