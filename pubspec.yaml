@@ -20,6 +20,7 @@ dependencies:
   ffi: ^2.1.2
   crypto: ^3.0.3
   file_picker: ^8.1.2
+  share_plus: ^10.1.4
   local_auth: ^2.3.0
   # Local path dependency to dl-core Flutter SDK bindings
   decentrilicense:
