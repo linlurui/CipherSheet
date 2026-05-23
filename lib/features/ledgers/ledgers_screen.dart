@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/security/screen_lock_service.dart';
 import '../../state/app_state.dart';
@@ -163,6 +164,136 @@ class _LedgersScreenState extends State<LedgersScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('读取备份失败: $e')),
+      );
+    }
+  }
+
+  static String? _lastExportDir;
+
+  /// 导出全部数据（密码加密）
+  Future<void> _exportData(AppState state) async {
+    final pwdCtrl = TextEditingController();
+    final pwd2Ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('导出数据'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('设置导出密码，导入时需要此密码解密', style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pwdCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: '导出密码'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: pwd2Ctrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: '确认密码'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              if (pwdCtrl.text.isEmpty) return;
+              if (pwdCtrl.text != pwd2Ctrl.text) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('两次密码不一致')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('导出'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final encrypted = await state.exportEncrypted(pwdCtrl.text);
+    if (!mounted) return;
+    final fileName = 'ciphersheet_export_${DateTime.now().millisecondsSinceEpoch}.enc';
+    if (Platform.isAndroid || Platform.isIOS) {
+      final dir = await getTemporaryDirectory();
+      final tmpPath = '${dir.path}/$fileName';
+      await File(tmpPath).writeAsString(encrypted);
+      if (!mounted) return;
+      await Share.shareXFiles(
+        [XFile(tmpPath, mimeType: 'application/octet-stream')],
+        subject: 'CipherSheet 数据导出',
+      );
+    } else {
+      final savePath = await FilePicker.platform.saveFile(
+        dialogTitle: '导出数据',
+        fileName: fileName,
+        type: FileType.any,
+      );
+      if (savePath == null) return;
+      _lastExportDir = p.dirname(savePath);
+      await File(savePath).writeAsString(encrypted);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已导出到 $savePath'),
+          duration: const Duration(seconds: 30),
+          action: SnackBarAction(label: '关闭', onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          }),
+        ),
+      );
+    }
+  }
+
+  /// 导入全部数据（密码解密，覆盖当前数据）
+  Future<void> _importData(AppState state) async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: '选择导出文件',
+      type: FileType.any,
+      initialDirectory: _lastExportDir,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final pf = result.files.first;
+    String cipherB64;
+    if (pf.bytes != null) {
+      cipherB64 = String.fromCharCodes(pf.bytes!);
+    } else if (pf.path != null) {
+      cipherB64 = await File(pf.path!).readAsString();
+    } else {
+      return;
+    }
+    final pwdCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('导入数据'),
+        content: TextField(
+          controller: pwdCtrl,
+          obscureText: true,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '导入密码'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final err = await state.importEncrypted(cipherB64.trim(), pwdCtrl.text);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('导入成功')),
       );
     }
   }
@@ -369,6 +500,19 @@ class _LedgersScreenState extends State<LedgersScreen>
       appBar: AppBar(
         title: const Text('CipherSheet · 加密账本'),
         actions: [
+          // 数据导入导出
+          PopupMenuButton<String>(
+            tooltip: '数据管理',
+            icon: const Icon(Icons.import_export),
+            onSelected: (value) {
+              if (value == 'export') _exportData(state);
+              if (value == 'import') _importData(state);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'export', child: Text('导出数据')),
+              PopupMenuItem(value: 'import', child: Text('导入数据')),
+            ],
+          ),
           // 安全中心菜单（合并助记词、锁屏密码、激活信息）
           PopupMenuButton<String>(
             tooltip: '安全中心',

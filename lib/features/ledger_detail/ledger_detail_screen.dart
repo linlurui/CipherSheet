@@ -1,10 +1,6 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +23,6 @@ class LedgerDetailScreen extends StatefulWidget {
 }
 
 class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
-  static String? _lastExportDir;
   bool _ensuringDefaultBill = false;
   String _cellFilter = '';
   final _searchCtrl = TextEditingController();
@@ -520,140 +515,6 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     }
     if (!mounted) return;
     await context.read<AppState>().renameLedger(widget.ledgerId, newName);
-  }
-
-  /// 导出数据（密码加密）
-  Future<void> _exportData() async {
-    final pwdCtrl = TextEditingController();
-    final pwd2Ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('导出数据'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('设置导出密码，导入时需要此密码解密', style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pwdCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '导出密码'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: pwd2Ctrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '确认密码'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(
-            onPressed: () {
-              if (pwdCtrl.text.isEmpty) return;
-              if (pwdCtrl.text != pwd2Ctrl.text) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('两次密码不一致')),
-                );
-                return;
-              }
-              Navigator.pop(ctx, true);
-            },
-            child: const Text('导出'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    final state = context.read<AppState>();
-    final encrypted = await state.exportEncrypted(pwdCtrl.text);
-    if (!mounted) return;
-    final fileName = 'ciphersheet_export_${DateTime.now().millisecondsSinceEpoch}.enc';
-    String? savePath;
-    if (Platform.isAndroid || Platform.isIOS) {
-      // 移动端：写到临时目录，弹系统分享面板，用户自己决定存哪
-      final dir = await getTemporaryDirectory();
-      final tmpPath = '${dir.path}/$fileName';
-      await File(tmpPath).writeAsString(encrypted);
-      if (!mounted) return;
-      await Share.shareXFiles(
-        [XFile(tmpPath, mimeType: 'application/octet-stream')],
-        subject: 'CipherSheet 数据导出',
-      );
-      return;
-    } else {
-      savePath = await FilePicker.platform.saveFile(
-        dialogTitle: '导出数据',
-        fileName: fileName,
-        type: FileType.any,
-      );
-      if (savePath == null) return;
-      _lastExportDir = p.dirname(savePath);
-      await File(savePath).writeAsString(encrypted);
-    }
-    if (!mounted) return;
-    final hint = '已导出到 $savePath';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(hint),
-        duration: const Duration(seconds: 30),
-        action: SnackBarAction(label: '关闭', onPressed: () {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        }),
-      ),
-    );
-  }
-
-  /// 导入数据（密码解密）
-  Future<void> _importData() async {
-    // 选择文件，优先在上次导出目录打开
-    final result = await FilePicker.platform.pickFiles(
-      dialogTitle: '选择导出文件',
-      type: FileType.any,
-      initialDirectory: _lastExportDir,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final pf = result.files.first;
-    String cipherB64;
-    if (pf.bytes != null) {
-      cipherB64 = String.fromCharCodes(pf.bytes!);
-    } else if (pf.path != null) {
-      cipherB64 = await File(pf.path!).readAsString();
-    } else {
-      return;
-    }
-    final pwdCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('导入数据'),
-        content: TextField(
-          controller: pwdCtrl,
-          obscureText: true,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '导入密码'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    final err = await context.read<AppState>().importEncrypted(cipherB64.trim(), pwdCtrl.text);
-    if (!mounted) return;
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('导入成功')),
-      );
-    }
   }
 
   /// 撤销记账：自动定位最近一条记账记录，一步确认即撤销
@@ -1366,12 +1227,6 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
                 case 'rename_ledger':
                   _renameLedger(view);
                   break;
-                case 'export':
-                  _exportData();
-                  break;
-                case 'import':
-                  _importData();
-                  break;
                 case 'clear_all':
                   _clearAllData(view);
                   break;
@@ -1385,9 +1240,6 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
               const PopupMenuItem(value: 'batch_cells', child: Text('批量新增单元格')),
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'rename_ledger', child: Text('重命名账本')),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'export', child: Text('导出数据')),
-              const PopupMenuItem(value: 'import', child: Text('导入数据')),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'undo_record',
