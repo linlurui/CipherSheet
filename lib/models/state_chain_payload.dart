@@ -145,8 +145,6 @@ class LocalLedgerStore {
             .map((k, v) => MapEntry(k, v.map((b) => b.toJson()).toList())),
         'settlements': settlements
             .map((k, v) => MapEntry(k, v.map((s) => s.toJson()).toList())),
-        'mnemonic_verifier': mnemonicVerifier,
-        'mnemonic_enabled': mnemonicEnabled,
       };
 
   factory LocalLedgerStore.fromJson(Map<String, dynamic> j) {
@@ -165,22 +163,7 @@ class LocalLedgerStore {
           .map((e) => Settlement.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     });
-    // 兼容旧版：如果 ledgers[0] 有 mnemonic_verifier，迁移到全局
-    String? globalVerifier = j['mnemonic_verifier'] as String?;
-    bool globalEnabled = (j['mnemonic_enabled'] as bool?) ?? false;
-    if (globalVerifier == null && ledgers.isNotEmpty) {
-      // 迁移：从第一个有 mnemonic 的 ledger 提取
-      for (final l in ledgers) {
-        final mv = (l.toJson())['mnemonic_verifier'] as String?;
-        if (mv != null) {
-          globalVerifier = mv;
-          globalEnabled = true;
-          break;
-        }
-      }
-    }
     return LocalLedgerStore(
-        ledgers: ledgers, bills: bills, settlements: settlements,
-        mnemonicVerifier: globalVerifier, mnemonicEnabled: globalEnabled);
+        ledgers: ledgers, bills: bills, settlements: settlements);
   }
 }

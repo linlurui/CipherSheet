@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +27,7 @@ class LedgerDetailScreen extends StatefulWidget {
 }
 
 class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
+  static String? _lastExportDir;
   bool _ensuringDefaultBill = false;
   String _cellFilter = '';
   final _searchCtrl = TextEditingController();
@@ -570,36 +572,8 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
     if (!mounted) return;
     final fileName = 'ciphersheet_export_${DateTime.now().millisecondsSinceEpoch}.enc';
     String? savePath;
-    bool androidUsedFallback = false;
-    if (Platform.isAndroid) {
-      // 尝试 SAF 路径选择（Android 10+）
-      // - 用户取消：saveFile 返回 null → 不保存
-      // - 系统不支持：抛出异常 → 降级存 Downloads
-      String? picked;
-      bool safSupported = true;
-      try {
-        picked = await FilePicker.platform.saveFile(
-          dialogTitle: '选择保存位置',
-          fileName: fileName,
-          type: FileType.any,
-        );
-      } catch (_) {
-        safSupported = false;
-      }
-      if (!safSupported) {
-        androidUsedFallback = true;
-        final dlDir = await getDownloadsDirectory();
-        final dir = dlDir ?? await getApplicationDocumentsDirectory();
-        savePath = '${dir.path}/$fileName';
-        await File(savePath!).writeAsString(encrypted);
-      } else if (picked != null) {
-        savePath = picked;
-        await File(savePath!).writeAsString(encrypted);
-      } else {
-        return; // 用户取消，不保存
-      }
-    } else if (Platform.isIOS) {
-      // iOS：先写到临时目录，再弹原生分享面板（用户可选"存储到文件"、AirDrop 等）
+    if (Platform.isAndroid || Platform.isIOS) {
+      // 移动端：写到临时目录，弹系统分享面板，用户自己决定存哪
       final dir = await getTemporaryDirectory();
       final tmpPath = '${dir.path}/$fileName';
       await File(tmpPath).writeAsString(encrypted);
@@ -616,16 +590,11 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
         type: FileType.any,
       );
       if (savePath == null) return;
+      _lastExportDir = p.dirname(savePath);
       await File(savePath).writeAsString(encrypted);
     }
     if (!mounted) return;
-    final hint = Platform.isAndroid
-        ? (androidUsedFallback
-            ? '已导出到下载目录：$fileName'
-            : '已保存到：$savePath')
-        : Platform.isIOS
-            ? '已导出：$fileName\n可在「文件」App → Ciphersheet 中找到'
-            : '已导出到 $savePath';
+    final hint = '已导出到 $savePath';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(hint),
@@ -639,10 +608,11 @@ class _LedgerDetailScreenState extends State<LedgerDetailScreen> {
 
   /// 导入数据（密码解密）
   Future<void> _importData() async {
-    // 选择文件
+    // 选择文件，优先在上次导出目录打开
     final result = await FilePicker.platform.pickFiles(
       dialogTitle: '选择导出文件',
       type: FileType.any,
+      initialDirectory: _lastExportDir,
     );
     if (result == null || result.files.isEmpty) return;
     final pf = result.files.first;
